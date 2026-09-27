@@ -1038,6 +1038,7 @@ const esbuildMediaScripts: { script: string; tsconfig: string }[] = [
 	{ script: 'simple-browser/esbuild.webview.mts', tsconfig: 'simple-browser/preview-src/tsconfig.json' },
 	// --- Start Positron ---
 	{ script: 'positron-ipywidgets/renderer/esbuild.js', tsconfig: 'positron-ipywidgets/renderer/tsconfig.json' },
+	{ script: 'positron-tiff-preview/esbuild.webview.mts', tsconfig: 'positron-tiff-preview/viewer-src/tsconfig.json' },
 	// --- End Positron ---
 ];
 

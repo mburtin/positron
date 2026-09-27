@@ -1,0 +1,8 @@
+src/**
+out/**
+viewer-src/**
+tsconfig*.json
+**/*.tsbuildinfo
+esbuild*.mts
+package-lock.json
+.gitignore
