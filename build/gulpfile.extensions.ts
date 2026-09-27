@@ -92,6 +92,7 @@ const compilations = [
 	'extensions/positron-runtime-debugger/tsconfig.json',
 	'extensions/positron-skills/tsconfig.json',
 	'extensions/positron-supervisor/tsconfig.json',
+	'extensions/positron-tiff-preview/tsconfig.json',
 	'extensions/positron-viewer/tsconfig.json',
 	'extensions/positron-zed/tsconfig.json',
 	// --- End Positron ---

@@ -1,0 +1,5 @@
+{
+	"displayName": "Positron TIFF Preview",
+	"description": "Open TIFF and OME-TIFF images in Positron",
+	"customEditor.displayName": "TIFF Preview"
+}

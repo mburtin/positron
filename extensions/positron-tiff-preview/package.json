@@ -1,0 +1,58 @@
+{
+	"name": "positron-tiff-preview",
+	"displayName": "%displayName%",
+	"description": "%description%",
+	"version": "1.0.0",
+	"publisher": "positron",
+	"private": true,
+	"engines": {
+		"vscode": "^1.70.0"
+	},
+	"main": "./out/extension",
+	"categories": [
+		"Other"
+	],
+	"activationEvents": [],
+	"capabilities": {
+		"virtualWorkspaces": true,
+		"untrustedWorkspaces": {
+			"supported": true
+		}
+	},
+	"contributes": {
+		"customEditors": [
+			{
+				"viewType": "positronTiffPreview.previewEditor",
+				"displayName": "%customEditor.displayName%",
+				"priority": "default",
+				"selector": [
+					{
+						"filenamePattern": "*.{tif,tiff}"
+					}
+				]
+			}
+		]
+	},
+	"scripts": {
+		"compile": "gulp compile-extension:positron-tiff-preview",
+		"watch": "gulp watch-extension:positron-tiff-preview"
+	},
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/posit-dev/positron.git"
+	},
+	"dependencies": {
+		"@deck.gl/core": "~9.4.0",
+		"@deck.gl/geo-layers": "~9.4.0",
+		"@deck.gl/layers": "~9.4.0",
+		"@luma.gl/constants": "~9.4.0",
+		"@luma.gl/core": "~9.4.0",
+		"@luma.gl/engine": "~9.4.0",
+		"@luma.gl/shadertools": "~9.4.0",
+		"@luma.gl/webgl": "~9.4.0",
+		"@vivjs/extensions": "^0.23.0",
+		"@vivjs/layers": "^0.23.0",
+		"@vivjs/loaders": "^0.23.0",
+		"geotiff": "^2.1.3"
+	}
+}
