@@ -826,6 +826,26 @@
 				"Build Posit Assistant"
 			],
 			"dependsOrder": "sequence"
+		},
+		// --- Personal modifications - Start ---
+		{
+			// Full minified build of the macOS arm64 app, then ad-hoc signing so
+			// Apple Silicon accepts the modified Electron bundle.
+			// Output: ../VSCode-darwin-arm64/NLM Studio.app (sibling of the repo).
+			"label": "Perso: Build macOS arm64 App",
+			"type": "shell",
+			"command": "npm run gulp vscode-darwin-arm64-min && codesign --force --deep --sign - \"../VSCode-darwin-arm64/NLM Studio.app\" && echo \"Built: $(cd .. && pwd)/VSCode-darwin-arm64/NLM Studio.app\"",
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"group": "build",
+			"presentation": {
+				"reveal": "always",
+				"panel": "dedicated",
+				"clear": true
+			},
+			"problemMatcher": []
 		}
+		// --- Personal modifications - End ---
 	]
 }
