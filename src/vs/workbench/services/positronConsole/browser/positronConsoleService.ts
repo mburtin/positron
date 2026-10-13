@@ -388,6 +388,18 @@ configurationRegistry.registerConfiguration({
 			description: localize('positron.console.assistantActions.enabled', "Enable Assistant-powered console actions, such as Fix and Explain."),
 			tags: ['preview'],
 		},
+		// Which AI tool the console Fix and Explain actions are routed to
+		'console.assistantActions.target': {
+			type: 'string',
+			enum: ['posit-assistant', 'claude-code'],
+			enumDescriptions: [
+				localize('positron.console.assistantActions.target.positAssistant', "Send console errors to Posit Assistant."),
+				localize('positron.console.assistantActions.target.claudeCode', "Send console errors to the Claude Code extension. The prompt is opened in a Claude Code editor tab."),
+			],
+			default: 'posit-assistant',
+			description: localize('positron.console.assistantActions.target', "Choose where the console Fix and Explain actions send the error."),
+			tags: ['preview'],
+		},
 		// Whether to check submitted code for completeness before running it
 		'console.promptWhenIncomplete': {
 			type: 'boolean',

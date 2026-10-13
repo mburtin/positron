@@ -14,7 +14,7 @@ import { localize } from '../../../../../nls.js';
 import { ConsoleOutputLines } from './consoleOutputLines.js';
 import { Button } from '../../../../../base/browser/ui/positronComponents/button/button.js';
 import { ActivityItemErrorMessage } from '../../../../services/positronConsole/browser/classes/activityItemErrorMessage.js';
-import { ConsoleQuickFix } from './activityErrorQuickFix.js';
+import { ConsoleQuickFix, CLAUDE_CODE_EXTENSION_ID, CLAUDE_CODE_TARGET, CONSOLE_ACTIONS_TARGET_KEY } from './activityErrorQuickFix.js';
 import { usePositronConfiguration, useContextKeyFromString, usePositronExtensionInstalled } from '../../../../../base/browser/positronReactHooks.js';
 import { AI_ENABLED_KEY } from '../../../positronAssistant/common/positronAIConfiguration.js';
 
@@ -46,7 +46,12 @@ export const ActivityErrorMessage = (props: ActivityErrorMessageProps) => {
 	// string is mirrored in the Posit Assistant extension (the two repositories
 	// cannot share a module).
 	const hasChatModels = useContextKeyFromString<boolean>('posit-assistant.hasChatModels');
-	const showAssistantActions = aiEnabled && enableAssistantActions && positAssistantInstalled && !!hasChatModels;
+	const actionsTarget = usePositronConfiguration<string>(CONSOLE_ACTIONS_TARGET_KEY);
+	const claudeCodeInstalled = usePositronExtensionInstalled(CLAUDE_CODE_EXTENSION_ID);
+	const targetAvailable = actionsTarget === CLAUDE_CODE_TARGET ?
+		claudeCodeInstalled :
+		positAssistantInstalled && !!hasChatModels;
+	const showAssistantActions = aiEnabled && enableAssistantActions && targetAvailable;
 
 	// Traceback useEffect.
 	useEffect(() => {
