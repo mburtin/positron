@@ -15,6 +15,7 @@ import { EXTENSION_ROOT_DIR } from './constants';
 import { findCondaExe } from './provider-conda';
 import { PackagerMetadata, isPixiMetadata, isCondaMetadata, isModuleMetadata, isRVersionsMetadata } from './r-installation';
 import { findPixiExe } from './provider-pixi';
+import { findProjectRProfile } from './project-profile';
 import { LOGGER } from './extension';
 
 /**
@@ -309,6 +310,7 @@ export async function createJupyterKernelSpec(
 		rBinaryPath?: string;
 		rArchitecture?: string;
 		packagerMetadata?: PackagerMetadata;
+		workingDirectory?: string; // Personnal modifications
 	}): Promise<JupyterKernelSpec> {
 
 	// Path to the kernel executable
@@ -401,6 +403,25 @@ export async function createJupyterKernelSpec(
 			LOGGER.info(`Using r-versions library paths: ${packagerMetadata.library}`);
 		}
 	}
+
+	// --- Personal modifications - Start ---
+
+	// Notebook sessions start in the notebook's folder, where R doesn't find the
+	// `.Rprofile` of the project above it (e.g. the one activating renv or rv).
+	const workingDirectory = options?.workingDirectory;
+	const userControlsProfile = env['R_PROFILE_USER'] !== undefined ||
+		process.env['R_PROFILE_USER'] !== undefined ||
+		!!config.get<Array<string>>('extraArguments')?.some(arg => arg === '--vanilla' || arg === '--no-init-file');
+	if (workingDirectory && !userControlsProfile) {
+		const workspaceFolder = vscode.workspace.getWorkspaceFolder(vscode.Uri.file(workingDirectory));
+		const projectProfile = workspaceFolder && findProjectRProfile(workingDirectory, workspaceFolder.uri.fsPath);
+		if (projectProfile) {
+			env['R_PROFILE_USER'] = path.join(EXTENSION_ROOT_DIR, 'resources', 'scripts', 'project-profile.R');
+			env['POSITRON_R_PROJECT_PROFILE'] = projectProfile;
+			LOGGER.info(`Using project R profile '${projectProfile}' for session in '${workingDirectory}'`);
+		}
+	}
+	// --- Personal modifications - End ---
 
 	// R script to run on session startup
 	const startupFile = path.join(EXTENSION_ROOT_DIR, 'resources', 'scripts', 'startup.R');
