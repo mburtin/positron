@@ -2262,6 +2262,11 @@ export abstract class Layout extends Disposable implements IWorkbenchLayoutServi
 			return; // Return if not initialized fully (https://github.com/microsoft/vscode/issues/105480)
 		}
 
+		// --- Start Positron ---
+		// The bottom panel is permanently disabled: it can never be shown.
+		hidden = true;
+		// --- End Positron ---
+
 		if (!hidden && this.setAuxiliaryBarMaximized(false) && this.isVisible(Parts.PANEL_PART)) {
 			return; // return: leaving maximised auxiliary bar made this part visible
 		}
@@ -3538,6 +3543,11 @@ class LayoutStateModel extends Disposable {
 
 		// Apply all overrides
 		this.applyOverrides(configuration);
+
+		// --- Start Positron ---
+		// The bottom panel is permanently disabled: ignore any restored visibility.
+		this.stateCache.set(LayoutStateKeys.PANEL_HIDDEN.name, true);
+		// --- End Positron ---
 
 		// Register for runtime key changes
 		this._register(this.storageService.onDidChangeValue(StorageScope.PROFILE, undefined, this._store)(storageChangeEvent => {
