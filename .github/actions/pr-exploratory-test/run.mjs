@@ -6,18 +6,18 @@
 // Drives the Claude Agent SDK to run the exploratory-test skill against a
 // Positron instance already launched and attached by the workflow.
 
-import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync, appendFileSync, mkdirSync, copyFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { missingFiles, readRunDir, skillVersion, writeRunPage } from '../../../.claude/skills/exploratory-test/renderer/html.mjs';
-import { parseReport } from '../../../.claude/skills/exploratory-test/renderer/report-parse.mjs';
-import { readKnownIssues } from '../../../.claude/skills/exploratory-test/renderer/finish.mjs';
-import { finishRun } from '../../../.claude/skills/exploratory-test/renderer/pipeline.mjs';
+import { missingFiles, readRunDir, writeRunPage } from '../../../.claude/skills/exploratory-test/renderer/page/html.mjs';
+import { skillVersion } from '../../../.claude/skills/exploratory-test/renderer/page/page-common.mjs';
+import { reportFromJson } from '../../../.claude/skills/exploratory-test/renderer/page/report-json.mjs';
+import { readKnownIssues } from '../../../.claude/skills/exploratory-test/renderer/agents/finish.mjs';
+import { completeRun, costPasses, environmentBrief, environmentLines, EXPLORE_TIME_UP, readEnvironment } from '../../../.claude/skills/exploratory-test/renderer/pipeline.mjs';
 import { buildKnownIssuesBrief } from '../../../.claude/skills/exploratory-test/renderer/known-issues.mjs';
-import { buildStats, readChecks } from '../../../.claude/skills/exploratory-test/renderer/stats.mjs';
+import { buildStats, passStats, readChecks } from '../../../.claude/skills/exploratory-test/renderer/stats.mjs';
 import { runSession } from './session.mjs';
-import { buildTaskLine, describeChange, resolveReport, withPrLine, buildCostRecord, renderCostFooter, buildShotsBaseUrl, parsePosIntEnv, renderStepSummary, renderSummaryTarget, runOutcome, turnCapWarning, parseTimeLimit, WRAP_UP_MINUTES, ENVIRONMENT } from './lib.mjs';
+import { buildTaskLine, describeChange, gitIn, mustEnv, renderCostFooter, buildShotsBaseUrl, parsePosIntEnv, renderStepSummary, renderSummaryTarget, runOutcome, turnCapWarning, parseTimeLimit, WRAP_UP_MINUTES, ENVIRONMENT } from './lib.mjs';
 
 // Dates the report footer's copyright.
 const STARTED_AT = new Date();
@@ -41,16 +41,16 @@ const TIME_LIMIT = parseTimeLimit(process.env.TIME_LIMIT);
 let timedOut = false;
 let timeWasUp = false;
 // The verify pass never drives the app, so it needs far fewer turns than the
-// run it checks; two trial passes used 22 and 26 tool calls.
-const VERIFY_MODEL = process.env.VERIFY_MODEL || 'sonnet';
+// run it checks; two trial passes used 22 and 26 tool calls. Opus caught
+// every planted mistake in the plant test that Sonnet missed a quarter of.
+const VERIFY_MODEL = process.env.VERIFY_MODEL || 'opus';
 const VERIFY_MAX_TURNS = parsePosIntEnv('VERIFY_MAX_TURNS', 60, process.env.VERIFY_MAX_TURNS);
 const VERIFY_ENABLED = process.env.VERIFY !== 'false';
 // The isolator drives the app, but only to run a few controls in its 12 minutes.
+const ISOLATE_MODEL = process.env.ISOLATE_MODEL || 'sonnet';
 const ISOLATE_MAX_TURNS = parsePosIntEnv('ISOLATE_MAX_TURNS', 100, process.env.ISOLATE_MAX_TURNS);
 // Off for teams whose AI policy does not allow the report's copy-for-agent prompts.
 const AGENT_PROMPTS = process.env.AGENT_PROMPTS !== 'false';
-// Each later pass bills separately from the explore pass, summed over its sessions.
-const passCosts = { verify: buildCostRecord(null), isolate: buildCostRecord(null), edit: buildCostRecord(null) };
 const REPORT_BASE_URL = buildShotsBaseUrl(process.env.REPORT_BASE_URL || '');
 const STEP_SUMMARY = process.env.GITHUB_STEP_SUMMARY;
 // Workaround for claude-agent-sdk-typescript#296 (resolver picks musl over
@@ -61,24 +61,15 @@ const CLAUDE_CODE_PATH = process.env.CLAUDE_CODE_PATH || undefined;
 // auth error when a 1Password resolution comes back empty.
 mustEnv('ANTHROPIC_API_KEY');
 
-function mustEnv(name) {
-	const v = process.env[name];
-	if (!v) {
-		console.error(`Missing required env var: ${name}`);
-		process.exit(1);
-	}
-	return v;
-}
-
-// Shots stay relative (`shots/<file>`): index.html and report.md are
+// Shots stay relative (`shots/<file>`): index.html and report.json are
 // published beside shots/, so they resolve without a base URL in the prompt.
 const RENDER_PATH = fileURLToPath(new URL('../../../.claude/skills/exploratory-test/renderer/render.mjs', import.meta.url));
 const CI_OVERRIDES = [
-		`**Write the run directory to \`${WORK_DIR}\`**, not to any path under \`~/.claude\`. Put \`report.md\`, \`ledger.md\` and \`actions.log\` directly in it, screenshots in \`${WORK_DIR}/shots/\`, and the files your scenarios use in \`${WORK_DIR}/files/\` (the skill's Test files rule).`,
+	`**Write the run directory to \`${WORK_DIR}\`**, not to any path under \`~/.claude\`. Put \`report.json\`, \`ledger.md\` and \`actions.log\` directly in it, screenshots in \`${WORK_DIR}/shots/\`, and the files your scenarios use in \`${WORK_DIR}/files/\` (the skill's Test files rule).`,
 	'**Do NOT clean up the pre-launched instance.** Do not run `stop.sh` against it, do not close the `positron` Playwright session, do not remove the run directory. The container is destroyed when the job ends, and cleanup would delete the screenshots before they are uploaded. Instances you launched yourself are yours to stop.',
 	`**Keep the logs in \`${WORK_DIR}/logs/\`.** Follow the skill's Logs section for the pre-launched instance and any you launch. The pre-launched instance's run directory is the only one under \`/tmp/positron-dev-launch/\` when you start, so note it before you launch another. A finding whose log was deleted cannot be checked by the person reading the report.`,
-	'**Do not look the PR up.** Leave out the report\'s `PR:` line, which the workflow adds, and start the ledger\'s header line at `Branch:`.',
-	`**Do not render the report; check it.** The workflow renders \`index.html\` itself once verification has been added. Instead of the skill's render step, run \`node ${RENDER_PATH} --check "${WORK_DIR}/report.md"\`, fix every line it prints, and run it again until it prints none.`,
+	'**Do not look the PR up.** Leave out the report\'s `header.pr`, which the workflow adds, and start the ledger\'s header line at `Branch:`.',
+	`**The renderer is \`${RENDER_PATH}\`**, with \`lint-json.mjs\` and \`report.schema.json\` beside it.`,
 ];
 const CI_OVERRIDES_LIST = CI_OVERRIDES.map((text, i) => `${i + 1}. ${text}`).join('\n');
 
@@ -166,23 +157,17 @@ ${ENVIRONMENT}
  * itself reads. Its verdicts are advisory and never remove a finding.
  */
 async function runAgent(step) {
-	const maxTurns = { edit: 2, isolate: ISOLATE_MAX_TURNS, verify: VERIFY_MAX_TURNS }[step.role];
+	const maxTurns = { isolate: ISOLATE_MAX_TURNS, verify: VERIFY_MAX_TURNS }[step.role];
 	const result = await runSession({
 		model: step.model, claudeCodePath: CLAUDE_CODE_PATH, label: step.purpose,
 		prompt: step.role === 'isolate' ? step.prompt + ISOLATE_CI_TAIL : step.prompt,
 		allowedTools: step.tools, maxTurns, cwd: step.cwd, resume: step.resume,
 		timeLimit: step.timeLimitMinutes ?? null, timeUpMessage: step.timeUpMessage,
-		...(step.role === 'verify' ? { effort: 'medium' } : {}),
+		// The verifier makes few calls, so each is logged in full for
+		// whoever audits the run; the isolator drives the app, like the explorer.
+		fullLog: step.role !== 'isolate',
 	});
-	addCost(step.role, result.cost);
-	return { text: result.finalText, durationMs: result.cost.duration_ms, turns: result.cost.num_turns, costUsd: result.cost.total_cost_usd, sessionId: result.sessionId };
-}
-
-/** Adds a session's cost to its pass's. */
-function addCost(role, record) {
-	const sum = passCosts[role];
-	const add = key => (sum[key] ?? 0) + (record[key] ?? 0) || null;
-	passCosts[role] = { ...record, total_cost_usd: add('total_cost_usd'), num_turns: add('num_turns'), duration_ms: add('duration_ms') };
+	return { text: result.finalText, model: result.cost.model, durationMs: result.cost.duration_ms, turns: result.cost.num_turns, costUsd: result.cost.total_cost_usd, sessionId: result.sessionId, opened: result.opened };
 }
 
 async function main() {
@@ -195,7 +180,7 @@ async function main() {
 	const knownBrief = buildKnownIssuesBrief(knownIssues);
 
 	const systemPrompt = readFileSync(EXPLORER_PATH, 'utf8') + CI_TAIL;
-	const git = args => execFileSync('git', ['-C', REPO_ROOT, '-c', 'color.ui=never', ...args], { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 });
+	const git = gitIn(REPO_ROOT);
 	const { stat, upstream } = describeChange({ git, base: BASE_SHA, head: HEAD_SHA });
 
 	const userPrompt = [
@@ -221,9 +206,9 @@ async function main() {
 		buildTaskLine(FOCUS, upstream),
 		'',
 		...(knownBrief ? [knownBrief, ''] : []),
-		'**The build is already the branch.** `out/` was compiled in this job from the ref under test, and the restored caches hold npm dependencies, built-ins and Playwright, never compiled output. Skip the skill\'s build-vs-branch grep and say in Run details that CI compiled it.',
+		environmentBrief(environmentLines(readEnvironment(REPO_ROOT))),
 		'',
-		'Write the report to `report.md` in the run directory. Return a two or three line summary and nothing else.',
+		'Write the report to `report.json` in the run directory. Return a two or three line summary and nothing else.',
 	].join('\n');
 
 	console.log(`[exploratory] WORK_DIR=${WORK_DIR} model=${MODEL} effort=${EFFORT || 'default'} maxTurns=${MAX_TURNS} timeLimit=${TIME_LIMIT ? `${TIME_LIMIT}m` : 'none'}`);
@@ -237,6 +222,7 @@ async function main() {
 		maxTurns: MAX_TURNS,
 		cwd: REPO_ROOT,
 		timeLimit: TIME_LIMIT,
+		timeUpMessage: EXPLORE_TIME_UP,
 		effort: EFFORT,
 		// Summarized display returns the notes the model writes between tool
 		// calls, which otherwise arrive as empty thinking blocks. gate.mjs and the
@@ -246,39 +232,26 @@ async function main() {
 		claudeCodePath: CLAUDE_CODE_PATH,
 		label: 'exploratory',
 	});
-	const assistantMessages = session.texts;
 	const cost = session.cost;
 	timedOut = session.timedOut;
 	timeWasUp = session.timeWasUp;
 
 	writeFileSync(join(WORK_DIR, 'cost.json'), JSON.stringify(cost, null, 2));
 
-	// The agent was told to write report.md itself; that file is authoritative
-	// when present. Only fall back to scraping chat text if it is missing or
-	// empty, and never overwrite a report that came from the file.
-	let fileReport = null;
-	try {
-		fileReport = readFileSync(join(WORK_DIR, 'report.md'), 'utf8');
-	} catch {
-		// Expected when the agent never wrote the file; resolveReport falls
-		// back to scraping chat text.
-	}
-
-	// Lazy: passCosts is not filled in until the verification below has run, and
-	// rendering this eagerly left the verify line and the total out of every
-	// footer. In the order they ran; the gate bills in its own job.
-	const footer = () => renderCostFooter([
-		{ label: 'explore', main: true, cost },
-		{ label: 'verify', cost: passCosts.verify },
-		{ label: 'isolate', cost: passCosts.isolate },
-		{ label: 'edit', cost: passCosts.edit },
-	], MAX_TURNS);
-	// A /test run has the PR from its event; a dispatched one from a lookup of its branch.
-	const report = withPrLine(resolveReport(fileReport, assistantMessages), process.env.GITHUB_REPOSITORY, process.env.PR_NUMBER);
+	// The agent was told to write report.json itself. A report with problems
+	// gets one retry in the same session.
+	const explored = { model: cost.model, costUsd: cost.total_cost_usd, turns: cost.num_turns, maxTurns: MAX_TURNS, durationMs: cost.duration_ms };
+	const pr = /^\d+$/.test(process.env.PR_NUMBER ?? '') && process.env.GITHUB_REPOSITORY ? { pr: { repo: process.env.GITHUB_REPOSITORY, number: Number(process.env.PR_NUMBER) } } : {};
+	const report = await completeRun(WORK_DIR, explored, {
+		repo: REPO_ROOT, base: BASE_SHA, head: HEAD_SHA, baseName: process.env.BASE_REF, runAgent, verify: VERIFY_ENABLED, model: VERIFY_MODEL, isolateModel: ISOLATE_MODEL,
+		branchCheck: `CI compiled \`out/\` in this job from the ref under test (head \`${HEAD_SHA.slice(0, 10)}\`).`,
+		header: { ...pr, headSha: HEAD_SHA },
+		log: line => console.log(`[pipeline] ${line}`),
+	});
+	// The explorer's alone when there is no report to carry the rest.
+	const passes = report?.cost.passes ?? costPasses(explored, []);
+	const footer = () => renderCostFooter(passes);
 	const partial = typeof cost.num_turns === 'number' && cost.num_turns >= MAX_TURNS;
-	// Read by the workflow to choose the final reaction and the PR comment.
-	// Written before anything below can exit, so a run with no report still
-	// says why.
 	if (process.env.GITHUB_OUTPUT) {
 		appendFileSync(process.env.GITHUB_OUTPUT, `outcome=${runOutcome({ report, numTurns: cost.num_turns, maxTurns: MAX_TURNS, timedOut })}\n`);
 	}
@@ -287,23 +260,14 @@ async function main() {
 		console.log(nearCap);
 	}
 
-	// One line per run that GitHub keeps for 90 days, after the artifact is
-	// gone: stats.mjs reads it back to compare skill versions. Written before
-	// the page, which links stats.json from Run details.
-	const recordStats = markdown => {
+	const recordStats = parsed => {
 		const stats = buildStats({
 			where: 'ci',
 			date: STARTED_AT.toISOString(),
 			run: process.env.GITHUB_RUN_ID,
 			version: skillVersion(),
-			model: cost.model,
-			turns: cost.num_turns,
-			maxTurns: MAX_TURNS,
-			costUsd: [cost, ...Object.values(passCosts)].reduce((sum, c) => sum + (c.total_cost_usd ?? 0), 0) || null,
-			durationMs: [cost, ...Object.values(passCosts)].reduce((sum, c) => sum + (c.duration_ms ?? 0), 0) || null,
-			// Isolation is the one pass whose cost is a choice, so it is kept apart to judge it.
-			isolate: passCosts.isolate.duration_ms ? { durationMs: passCosts.isolate.duration_ms, turns: passCosts.isolate.num_turns } : null,
-			parsed: markdown ? parseReport(markdown) : null,
+			...passStats(passes),
+			parsed,
 			checks: readChecks(WORK_DIR),
 			timeLimit: TIME_LIMIT ? { minutes: TIME_LIMIT, reached: timeWasUp, stopped: timedOut } : null,
 		});
@@ -311,54 +275,15 @@ async function main() {
 		console.log(`[exploratory] stats: ${JSON.stringify(stats)}`);
 	};
 
-	// What goes in report.md, and what goes in the job summary. They used to be
-	// the same string: the summary is a signpost now, and the report is the
-	// thing it points at.
-	let reportMarkdown = null;
 	let summary;
 	if (report) {
-		// The report opens with its own "# Exploratory test: ..." heading, so a
-		// wrapper heading here would render two titles. The partial and
-		// no-report branches below still need one: they have no report to
-		// supply it. Written when the reply was the only copy, or the PR line
-		// changed it.
-		if (report !== fileReport) {
-			writeFileSync(join(WORK_DIR, 'report.md'), report);
-		}
-
-		// The pipeline reads report.md on disk, so it has to come after the
-		// fallback write above. Annotation is best effort and never removes a
-		// row, because a wrong FALSE POSITIVE that deleted a real finding would
-		// be invisible to everyone.
-		await finishRun(WORK_DIR, { repo: REPO_ROOT, base: BASE_SHA, head: HEAD_SHA, baseName: process.env.BASE_REF, runAgent, verify: VERIFY_ENABLED, model: VERIFY_MODEL, log: line => console.log(`[pipeline] ${line}`) });
 		// Read after the pipeline, which writes change-base.json.
 		const run = readRunDir(WORK_DIR);
-		const reviewed = readFileSync(join(WORK_DIR, 'report.md'), 'utf8').trimEnd();
-		reportMarkdown = `${reviewed}\n\n${footer()}\n`;
-		// Written with the footer: report.md is published to the CDN on its own,
-		// where the step summary's copy of the cost is not reachable.
-		writeFileSync(join(WORK_DIR, 'report.md'), reportMarkdown);
-		recordStats(reportMarkdown);
-		// index.html is what the published run directory's URL already points at,
-		// and a rendered page is easier to read than raw markdown with absolute
-		// image URLs in it. The markdown stays: the verification pass reads it,
-		// and a file you can grep is worth keeping.
+		const parsed = reportFromJson(report, { ledger: run.ledger });
+		recordStats(parsed);
+		// index.html is what the published run directory's URL already points at.
 		try {
-			const parsed = parseReport(reportMarkdown, { ledger: run.ledger });
-			await writeRunPage(join(WORK_DIR, 'index.html'), reportMarkdown, parsed, {
-				agentPrompts: AGENT_PROMPTS,
-				// Coverage is built from the run's ledger when it wrote one.
-				ledger: run.ledger,
-				// Evidence in the prompt has to open from wherever it is pasted.
-				base: REPORT_BASE_URL || WORK_DIR,
-				skillVersion: skillVersion(),
-				diff: `${BASE_SHA.slice(0, 8)}...${HEAD_SHA.slice(0, 8)}`,
-				fileExists: run.fileExists,
-				readFile: run.readFile,
-				startedAt: STARTED_AT,
-				knownIssues,
-				changeBase: run.changeBase,
-			});
+			await writeRunPage(join(WORK_DIR, 'index.html'), parsed, { ...run, skillVersion: skillVersion(), agentPrompts: AGENT_PROMPTS, base: REPORT_BASE_URL || WORK_DIR, diff: `${BASE_SHA.slice(0, 8)}...${HEAD_SHA.slice(0, 8)}`, startedAt: STARTED_AT });
 			// Warned rather than failed: the page still renders, with the missing files unlinked.
 			const { logs, files } = missingFiles(parsed, run.fileExists);
 			const missing = [...logs, ...files];
@@ -366,9 +291,9 @@ async function main() {
 				console.error(`[report] WARN: files listed but not in the run directory: ${missing.join(', ')}`);
 			}
 		} catch (err) {
-			console.error(`[report] could not render HTML, markdown is unaffected: ${err}`);
+			console.error(`[report] could not render report.json: ${err}`);
 		}
-		summary = renderStepSummary(reportMarkdown, REPORT_BASE_URL);
+		summary = renderStepSummary(report, REPORT_BASE_URL);
 	} else if (timedOut) {
 		summary = `## Exploratory test: stopped at the time limit\n\nThe agent was stopped ${WRAP_UP_MINUTES} minutes after its ${TIME_LIMIT}-minute time limit, before writing a report. \`actions.log\` and any screenshots captured so far are in the artifact.\n\n${footer()}\n`;
 	} else if (partial) {
@@ -386,7 +311,7 @@ async function main() {
 	}
 	// The full report still goes to the action log. It is the one copy that
 	// survives an artifact upload or a CDN publish that did not happen.
-	console.log(reportMarkdown ?? summary);
+	console.log(report ? `${JSON.stringify(report, null, 2)}\n\n${footer()}` : summary);
 
 	if (!report) {
 		process.exit(1);

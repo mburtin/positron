@@ -8,6 +8,7 @@
 
 import { resolve, sep } from 'node:path';
 import { query as sdkQuery } from '@anthropic-ai/claude-agent-sdk';
+import { readPaths } from '../../../.claude/skills/exploratory-test/renderer/agents/claude-cli.mjs';
 import { buildCostRecord, timeUpHook, WRAP_UP_MINUTES } from './lib.mjs';
 
 const FILE_TOOLS = new Set(['Edit', 'Write', 'NotebookEdit']);
@@ -24,7 +25,7 @@ export function writeGuard(root) {
 	};
 }
 
-export async function runSession({ prompt, systemPrompt, allowedTools, model, maxTurns, cwd, writeRoot, resume, timeLimit = null, timeUpMessage = '', effort = '', thinking, claudeCodePath, label = 'session', query = sdkQuery, minuteMs = 60000, log = console.log }) {
+export async function runSession({ prompt, systemPrompt, allowedTools, model, maxTurns, cwd, writeRoot, resume, timeLimit = null, timeUpMessage = '', effort = '', thinking, claudeCodePath, label = 'session', fullLog = false, query = sdkQuery, minuteMs = 60000, log = console.log }) {
 	const texts = [];
 	let cost = buildCostRecord(null);
 	// Kept so a later message can resume this session.
@@ -35,13 +36,14 @@ export async function runSession({ prompt, systemPrompt, allowedTools, model, ma
 	// own num_turns runs about 40% lower. Labelled "msg" so a live log cannot be
 	// read as approaching the cap.
 	let messages = 0;
+	// What the agent read, so a claim to have looked at a file can be checked.
+	const opened = [];
 	const abortController = new AbortController();
 	let hardStop;
 	let hooks;
 	if (timeLimit) {
 		const hook = timeUpHook({
 			deadline: Date.now() + timeLimit * minuteMs,
-			minutes: timeLimit,
 			message: timeUpMessage,
 			onTimeUp: () => { timeWasUp = true; log(`[${label}] time limit: ${timeLimit}m are up; told the agent to wrap up`); },
 		});
@@ -87,9 +89,12 @@ export async function runSession({ prompt, systemPrompt, allowedTools, model, ma
 				if (text.length) {
 					const joined = text.join('\n');
 					texts.push(joined);
-					log(`[msg ${messages}] assistant text (${joined.length} chars):\n${joined.slice(0, 1000)}${joined.length > 1000 ? '\n...(truncated)' : ''}`);
+					const shown = fullLog ? joined : joined.slice(0, 1000);
+					log(`[msg ${messages}] assistant text (${joined.length} chars):\n${shown}${shown.length < joined.length ? '\n...(truncated)' : ''}`);
 				}
-				const tools = content.filter(b => b.type === 'tool_use').map(b => `${b.name}(${JSON.stringify(b.input).slice(0, 200)})`);
+				opened.push(...readPaths(message));
+				// The explorer's calls are clipped: hundreds of them, some writing whole files.
+				const tools = content.filter(b => b.type === 'tool_use').map(b => `${b.name}(${JSON.stringify(b.input).slice(0, fullLog ? 4000 : 200)})`);
 				if (tools.length) { log(`[msg ${messages}] tool calls: ${tools.join(' | ')}`); }
 			} else if (message.type === 'result') {
 				cost = buildCostRecord(message);
@@ -103,5 +108,5 @@ export async function runSession({ prompt, systemPrompt, allowedTools, model, ma
 	} finally {
 		clearTimeout(hardStop);
 	}
-	return { texts, finalText: texts.at(-1) ?? '', cost, timedOut, timeWasUp, messages, sessionId };
+	return { texts, finalText: texts.at(-1) ?? '', cost, timedOut, timeWasUp, messages, sessionId, opened };
 }

@@ -182,9 +182,19 @@ const choose: PageFn<Target & { item: string; wait: number }> = async (page, a, 
 	if (!('loc' in sc) || !sc.loc) { return { ok: false, ...sc }; }
 	let trig = (await lib.byRole(sc.loc, a.role, a.name, a.partial)).filter({ visible: true });
 	// A split button has two halves of one name; the menu is the one with a popup.
+	// Positron's action-bar split button marks neither half (the Plots open
+	// button): when the two are exactly its action and drop-down halves, of one
+	// button, the menu is the drop-down. Any other same-named pair still refuses.
 	if (await trig.count() > 1 && !a.nth) {
 		const popup = trig.and(sc.loc.locator('[aria-haspopup]'));
-		if (await popup.count() === 1) { trig = popup; }
+		const half = (s: string) => trig.and(sc.loc.locator(s));
+		const dropDown = half(lib.css.splitButton.dropDown);
+		if (await popup.count() === 1) {
+			trig = popup;
+		} else if (await trig.count() === 2 && await half(lib.css.splitButton.action).count() === 1 && await dropDown.count() === 1
+			&& await trig.evaluateAll(es => es[0].parentElement === es[1].parentElement)) {
+			trig = dropDown;
+		}
 	}
 	const n = await trig.count();
 	if (n !== 1 && !a.nth) { return { ok: false, error: n ? `${n} visible ${a.role} "${a.name}"; pass --nth` : `no visible ${a.role} "${a.name}"` }; }
@@ -248,10 +258,15 @@ const typeText: PageFn<{ scope: string; text: string; enter: boolean }> = async 
 };
 
 // runs in run-code
-const pickRow: PageFn<{ text: string }> = async (page, a, lib) => {
+const pickRow: PageFn<{ text: string; nth: number }> = async (page, a, lib) => {
 	if (!await lib.quickOpen()) { return { ok: false, error: 'no quick pick is open' }; }
-	const p = await lib.pick({ exact: a.text });
-	if (!p.ok) { return p; }
+	const p = await lib.pick({ exact: a.text, nth: a.nth });
+	if (!p.ok) {
+		// Rows that share a label: the row as "shown" writes it tells them apart, unless they look the same.
+		const shown = (p as { shown?: string[] }).shown ?? [];
+		const how = new Set(shown).size === shown.length ? 'give the row as "shown" writes it, "label (description)", or pass --nth (1 = first)' : 'pass --nth (1 = first), in list order';
+		return / rows match "[^"]*"$/.test(p.error) ? { ...p, error: `${p.error}; ${how}` } : p;
+	}
 	await lib.clickRow(p.row);
 	await lib.sleep(200);
 	return { ok: true, chose: p.row.label, description: p.row.description, closed: !await lib.quickOpen() };
@@ -363,7 +378,7 @@ export const uiCommands: Record<string, (argv: string[]) => Json | string> = {
 			}
 			case 'pick':
 				need(1, 'the row');
-				out = inPage(p.session, pickRow, { text: r.join(' ') });
+				out = inPage(p.session, pickRow, { text: r.join(' '), nth: count(p, 'nth', 0, 1, 'which matching row to take, 1 = first') });
 				break;
 			default:
 				notACommand(cmd, ['read', 'watch', 'click', 'fill', 'check', 'choose', 'type', 'pick']);

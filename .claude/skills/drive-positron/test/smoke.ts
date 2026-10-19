@@ -233,6 +233,10 @@ const cases: Case[] = [
 	{ name: 'view-read missing view', run: ['view-read.sh', '--view', 'No Such View'], fail: true },
 	{ name: 'view-read the view without --view', run: ['view-read.sh', 'Variables'], fail: true, check: o => includes(o.stderr, 'unexpected argument "Variables"') || logged('view-read.sh -s=net1: FAILED Variables: unexpected argument') },
 	{ name: 'view-read --view=Variables takes the glued value', run: ['view-read.sh', '--view=Variables'], check: o => includes(o.text, 'smoke_f') },
+	{ name: 'tree rows Variables', run: ['tree.sh', '--view', 'Variables', 'rows'], check: o => includes(o.json!.rows, 'smoke_f') },
+	{ name: 'console-run r a nested list', run: ['console-run.sh', '--language', 'r', 'smoke_l <- list(a = 1, b = list(c = 2))'] },
+	{ name: 'tree expand a Variables row', wait: 1000, run: ['tree.sh', '--view', 'Variables', 'expand', 'smoke_l'], check: o => (o.json!.state !== 'expanded' && `state ${o.json!.state}`) || logged('tree.sh -s=net1: expand "smoke_l" in Variables') },
+	{ name: 'tree collapse a Variables row without --view', run: ['tree.sh', 'collapse', 'smoke_l'], check: o => (o.json!.state !== 'collapsed' && `state ${o.json!.state}`) || logged('tree.sh -s=net1: collapse "smoke_l" in any view') },
 	{ name: 'console-run r opens help', run: ['console-run.sh', '--language', 'r', '?mean'] },
 	{ name: 'view-read Help reads the page', wait: 3000, run: ['view-read.sh', '--view', 'Help'], check: o => includes(o.text, 'Arithmetic Mean') },
 	{ name: 'ui read Help notes the page it leaves out', run: ['ui.sh', 'read', 'Help'], check: o => includes(o.json!.note, 'view-read.sh --view Help') },
@@ -243,6 +247,10 @@ const cases: Case[] = [
 	{ name: 'console-run python matplotlib plot', run: () => ['console-run.sh', '--language', 'python', '--name', found.py, '--capture', 'import matplotlib.pyplot as plt; plt.plot([1, 2, 3], [2, 1, 3]); plt.show()'] },
 	{ name: 'plots save --width (intrinsic size)', wait: 1500, run: ['plots.sh', 'save', '--width', '640'], check: o => includes(o.json!.intrinsicSize, 'unticked') || includes(o.json!.tree, 'spinbutton "Width": "640"') },
 	{ name: 'ui click Cancel (intrinsic size)', run: ['ui.sh', 'click', 'button', 'Cancel', '--in', 'dialog'], check: o => includes(o.json!.note, 'closed') },
+	// The Plots open control is an action-bar split button: both halves are "Select where to open plot" and neither has aria-haspopup.
+	{ name: 'console-run python matplotlib plot 2', run: () => ['console-run.sh', '--language', 'python', '--name', found.py, '--capture', 'plt.figure(); plt.plot([3, 1], color="red"); plt.show()'] },
+	{ name: 'plots open editor through the split button whose halves share one name', wait: 1500, run: ['plots.sh', 'open', 'editor'], check: o => includes(o.json!.opened, 'editor tab "matplotlib') },
+	{ name: 'palette-run Close All Editors (matplotlib plot tab)', run: ['palette-run.sh', 'View: Close All Editors'], check: o => o.json!.closed !== true && 'the palette did not close' },
 	{ name: 'console-run r html to Viewer', quick: true, run: ['console-run.sh', '--language', 'r', 'print(htmltools::browsable(htmltools::tags$button("smoke-viewer-button")))'] },
 	{ name: 'viewer wait-content', quick: true, run: ['viewer.sh', 'wait-content', '20'], check: o => includes(o.json!.shown, 'smoke-viewer-button') },
 	{ name: 'view-read Viewer', quick: true, run: ['view-read.sh', '--view', 'Viewer'], check: o => includes(o.text, 'button "smoke-viewer-button"') },
@@ -258,6 +266,7 @@ const cases: Case[] = [
 	// ---- Explorer tree, Data Explorer
 	{ name: 'palette-run Show Explorer', quick: true, run: ['palette-run.sh', 'View: Show Explorer'] },
 	{ name: 'tree rows Explorer', quick: true, run: ['tree.sh', '--view', 'Explorer', 'rows'], check: o => includes(o.json!.rows, '"text":"cars.csv"') || includes(o.json!.rows, '"state":"leaf"') },
+	{ name: 'tree click in the folder pane by the title it reads', run: ['tree.sh', '--view', 'ws', 'click', 'cars.csv'], check: o => includes(o.json!.text, 'cars.csv') },
 	{ name: 'tree menu missing item', run: ['tree.sh', '--view', 'Explorer', 'menu', 'cars.csv', 'No Such Item'], fail: true },
 	{ name: 'tree missing row', run: ['tree.sh', '--view', 'Explorer', 'click', 'no-such-file.txt'], fail: true },
 	{ name: 'tree unknown command is a usage error, before the page', run: ['tree.sh', '--view', 'Explorer', 'expnad', 'cars.csv'], fail: true, check: o => (o.code !== 2 && `exit ${o.code}`) || includes(o.json?.error, '"expnad" is not a command') },
@@ -273,6 +282,9 @@ const cases: Case[] = [
 	{ name: 'ui click blocked by the filter popup', run: ['ui.sh', 'click', 'button', 'Add Filter', '--in', 'editor'], fail: true, check: o => (/\u001b|Call log|locator\(/.test(o.text) && `raw Playwright error: ${o.text.slice(0, 200)}`) || includes(o.json!.error, 'the click on button "Add Filter" in editor did not happen within 3 s: something drawn on top of it took the click; open on top: a dialog') },
 	{ name: 'ui choose condition in the filter popup', run: ['ui.sh', 'choose', 'button', 'Select Condition', 'is not empty', '--in', 'dialog'], check: o => includes(o.json!.trigger, 'Select Condition -> is not empty') },
 	{ name: 'ui click Apply Filter', run: ['ui.sh', 'click', 'button', 'Apply Filter', '--in', 'dialog'], check: o => includes(o.json!.note, 'closed') },
+	// The pointer comes from the closed popup: the toolbar button remounts its label on mouseenter, so click must let that run before pressing.
+	{ name: 'ui click Import Data right after the filter popup closed opens its dialog', run: ['ui.sh', 'click', 'button', 'Import Data', '--in', 'editor'], check: o => includes(o.json!.opened, 'a dialog: read it with ui.sh read dialog') },
+	{ name: 'ui click Cancel closes the Import Data dialog', run: ['ui.sh', 'click', 'button', 'Cancel', '--in', 'dialog'], check: o => includes(o.json!.note, 'the dialog closed') },
 
 	// ---- Notebook and Quarto
 	{ name: 'open-file notebook.ipynb', quick: true, run: ['open-file.sh', 'notebook.ipynb'] },
@@ -329,6 +341,16 @@ const cases: Case[] = [
 	{ name: 'qmd run the cell that reads it', run: ['qmd.sh', '--file', 'report.qmd', 'run', '2'], check: o => !o.json!.changed && 'nothing changed' },
 	{ name: 'qmd wait for it', run: ['qmd.sh', '--file', 'report.qmd', 'wait', '2', '30'], check: o => includes(o.json!.output?.text, 'sub-answer 42') },
 	{ name: 'open-file report.qmd, the root one', run: ['open-file.sh', 'report.qmd'], check: o => !String(o.json!.path).endsWith('/ws/report.qmd') && `path ${o.json!.path}` },
+	// Two Quick Open rows labelled report.qmd: ui.sh pick takes one by --nth, or as "shown" writes it.
+	{ name: 'palette-run Go to File (two report.qmd)', run: ['palette-run.sh', 'Go to File...'] },
+	{ name: 'ui type report.qmd in Quick Open', run: ['ui.sh', 'type', 'report.qmd', '--in', 'quickpick'] },
+	{ name: 'ui pick a label two rows share says how to choose', run: ['ui.sh', 'pick', 'report.qmd'], fail: true, check: o => includes(o.json!.error, 'give the row as "shown" writes it, "label (description)", or pass --nth (1 = first)') || includes(o.json!.shown, 'report.qmd (sub)') },
+	{ name: 'ui pick --nth 3 of two report.qmd rows', run: ['ui.sh', 'pick', 'report.qmd', '--nth', '3'], fail: true, check: o => includes(o.json!.error, 'so there is no row 3') },
+	{ name: 'ui pick --nth 2 of two report.qmd rows', run: ['ui.sh', 'pick', 'report.qmd', '--nth', '2'], check: o => (o.json!.description !== 'sub' && `chose ${o.json!.chose} (${o.json!.description})`) || (!o.json!.closed && 'the quick pick stayed open') },
+	{ name: 'palette-run Go to File (two report.qmd again)', run: ['palette-run.sh', 'Go to File...'] },
+	{ name: 'ui type report.qmd in Quick Open again', run: ['ui.sh', 'type', 'report.qmd', '--in', 'quickpick'] },
+	{ name: 'ui pick the row as shown writes it', run: ['ui.sh', 'pick', 'report.qmd (sub)'], check: o => o.json!.description !== 'sub' && `chose ${o.json!.chose} (${o.json!.description})` },
+	{ name: 'open-file report.qmd, the root one, after the picks', run: ['open-file.sh', 'report.qmd'], check: o => !String(o.json!.path).endsWith('/ws/report.qmd') && `path ${o.json!.path}` },
 	// Notebook and Quarto sessions are not consoles: sessions --all lists them.
 	{ name: 'panel sessions --all', run: ['panel.sh', 'sessions', '--all'], check: o => (!o.json!.sessions?.some((x: Json) => x.kind === 'notebook' && x.document === 'notebook.ipynb') && `no notebook session: ${JSON.stringify(o.json!.sessions)}`) || (!o.json!.sessions?.some((x: Json) => x.kind === 'quarto' && x.document === 'report.qmd') && 'no quarto session') || (!o.json!.sessions?.some((x: Json) => x.kind === 'console' && x.id) && 'no console session with its id') },
 
@@ -359,7 +381,8 @@ const cases: Case[] = [
 	{ name: 'open-file broken.json', run: ['open-file.sh', 'broken.json'] },
 	{ name: 'panel tab Problems (badge)', wait: 1500, run: ['panel.sh', 'tab', 'Problems'], retry: 2, retryOn: /not selected/, check: o => o.json!.tab !== 'Problems' && `tab ${o.json!.tab}` },
 	{ name: 'view-read Problems', run: ['view-read.sh', '--view', 'Problems'], check: o => includes(o.text, 'broken.json') },
-	// The editor area hidden: its tabs are still listed, and it says so.
+	// The editor area hidden: its tabs are still listed, and it says so. Close All Editors (matplotlib plot tab) closed analysis.R in a full run: open it again first.
+	{ name: 'open-file analysis.R again, before the editor area is hidden', run: ['open-file.sh', 'analysis.R'], check: o => o.json!.activeTab !== 'analysis.R' && `active tab ${o.json!.activeTab}` },
 	{ name: 'palette-run Toggle Maximized Panel', run: ['palette-run.sh', 'View: Toggle Maximized Panel'] },
 	{ name: 'panel editors, editor area hidden', run: ['panel.sh', 'editors'], check: o => (o.json!.editorArea !== 'hidden' && 'editorArea is not hidden') || includes(o.json!.groups, '"title":"analysis.R"') },
 	{ name: 'palette-run Toggle Maximized Panel back', run: ['palette-run.sh', 'View: Toggle Maximized Panel'] },

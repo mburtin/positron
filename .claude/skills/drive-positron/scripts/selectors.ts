@@ -70,6 +70,12 @@ export const css = {
 		notifications: '.notifications-toasts, .notifications-center',
 		modal: '.positron-modal-overlay, .context-view', // what holds focus while a Positron menu or popup is open; no role
 	},
+	splitButton: {
+		// Positron's action-bar split button: two halves that can share one name, and
+		// neither has aria-haspopup, so only the class tells which half opens the menu.
+		action: '.action-bar-button-action-button',
+		dropDown: '.action-bar-button-drop-down-button',
+	},
 	quickInput: {
 		// Closed widgets stay in the DOM; the live one is the visible one. Its rows
 		// are a virtual list moved by a transform (references/reading-ui-state.md).
@@ -226,6 +232,14 @@ export const css = {
 		leaf: '.positron-tree-twisty-leaf',
 		indent: '.positron-tree-indent', // the level is this element's width
 		indentVar: '--positron-tree-indent-width',
+		// The Variables pane draws its own rows (variables, groups, "more" rows), with
+		// no roles, levels or expanded states in the tree either.
+		varRow: '.variable-item, .variable-group, .variable-overflow',
+		varContent: '.name-value, .title', // the name or group title, to click; the row's text adds value and type
+		varTwisty: '.expand-collapse-area', // the chevron's hit area, which toggles on mouseup
+		varIcon: '.expand-collapse-icon', // absent on a leaf
+		varExpanded: '.codicon-chevron-down', // the icon of an expanded row; collapsed is chevron-right
+		varIndent: '.name-column-indenter', // the level is its left margin, 20px a level
 		// Upstream trees, read the same way so one parser serves both.
 		listRow: '.monaco-list-row[role=treeitem]',
 		listContent: '.monaco-tl-contents',
