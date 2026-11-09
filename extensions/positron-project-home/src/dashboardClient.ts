@@ -81,7 +81,7 @@
 	/** Keeps the first five rows visible, even when their text wraps. */
 	function limitVisibleRows(grid: HTMLElement): void {
 		for (const card of grid.querySelectorAll<HTMLElement>('.card-content')) {
-			const rows = Array.from(card.querySelectorAll('ul:not(.tags) > li'));
+			const rows = Array.from(card.querySelectorAll('ul > li'));
 			if (rows.length <= 5) {
 				continue;
 			}

@@ -8,13 +8,13 @@ import { ProjectAction, TaskAction } from './components/component';
 import { createComponents } from './components/registry';
 import { renderDashboard } from './dashboard';
 import { loadLayout, resolveLayout, saveLayout } from './layout';
-import { appendProjectLink, editProjectTasks, loadProject, Project, ProjectDetailsError, resolveLinkTarget, TaskEdit } from './project';
+import { appendProjectShortcut, editProjectTasks, FileShortcutSection, loadProject, Project, ProjectDetailsError, projectResource, removeProjectFileShortcut, resolveLinkTarget, TaskEdit } from './project';
 import { configPath, legacyConfigPath } from './settings';
 
 const viewType = 'positron.projectHome';
 
 /** Collects the label and target using the workbench's input controls. */
-async function promptForLink(folder: vscode.Uri) {
+async function promptForLink() {
 	const label = await vscode.window.showInputBox({
 		title: vscode.l10n.t("Add Quick Link"),
 		prompt: vscode.l10n.t("Enter the name to show on the project home page"),
@@ -25,12 +25,33 @@ async function promptForLink(folder: vscode.Uri) {
 	}
 	const target = await vscode.window.showInputBox({
 		title: vscode.l10n.t("Add Quick Link"),
-		prompt: vscode.l10n.t("Enter an HTTPS URL or a path relative to the project folder"),
+		prompt: vscode.l10n.t("Enter an HTTPS URL"),
 		placeHolder: 'https://…',
-		validateInput: value => resolveLinkTarget(folder, value.trim()) ? undefined
-			: vscode.l10n.t("Enter a valid HTTPS URL without credentials or a project-relative path."),
+		validateInput: value => resolveLinkTarget(value.trim()) ? undefined
+			: vscode.l10n.t("Enter a valid HTTPS URL without credentials."),
 	});
 	return target === undefined ? undefined : { label: label.trim(), target: target.trim() };
+}
+
+/** Selects a file that can be stored as a project-relative shortcut. */
+async function pickProjectFile(folder: vscode.Uri, section: FileShortcutSection) {
+	const title = section === 'documents' ? vscode.l10n.t("Pin Document") : vscode.l10n.t("Pin Data File");
+	const [uri] = await vscode.window.showOpenDialog({
+		title,
+		openLabel: title,
+		defaultUri: folder,
+		canSelectFiles: true,
+		canSelectFolders: false,
+	}) ?? [];
+	if (!uri) {
+		return undefined;
+	}
+	const prefix = folder.path.replace(/\/$/, '') + '/';
+	const target = uri.path.startsWith(prefix) ? uri.path.slice(prefix.length) : '';
+	if (projectResource(folder, target)?.toString() !== uri.toString()) {
+		throw new ProjectDetailsError(vscode.l10n.t("Select a file inside the project folder."));
+	}
+	return { label: target.slice(target.lastIndexOf('/') + 1), target };
 }
 
 /** Collects any input needed for a task action before opening the project details for writing. */
@@ -202,12 +223,12 @@ export function activate(context: vscode.ExtensionContext): void {
 				if (!action) {
 					return;
 				}
-				if (!(action instanceof vscode.Uri) && (action === 'add-link' || !('external' in action))) {
+				if (!(action instanceof vscode.Uri) && (typeof action === 'string' || !('external' in action))) {
 					const project = renderedProject;
 					if (!project || editingDetails.has(key)) {
 						return;
 					}
-					if (action !== 'add-link' && action.type === 'edit-task-notes') {
+					if (typeof action !== 'string' && action.type === 'edit-task-notes') {
 						const editor = { action, revision: project.taskRevision, saving: false };
 						notesEditor = editor;
 						if (!await panel.webview.postMessage({ type: 'open-task-notes', title: action.title, notes: action.notes }) && notesEditor === editor) {
@@ -217,12 +238,18 @@ export function activate(context: vscode.ExtensionContext): void {
 					}
 					editingDetails.add(key);
 					try {
-						if (action === 'add-link') {
-							const link = await promptForLink(folder.uri);
-							if (!link || panels.get(key) !== panel) {
+						if (action === 'add-link' || action.type === 'add-file') {
+							const shortcut = action === 'add-link' ? await promptForLink() : await pickProjectFile(folder.uri, action.section);
+							if (!shortcut || panels.get(key) !== panel) {
 								return;
 							}
-							await appendProjectLink(folder.uri, link);
+							await appendProjectShortcut(folder.uri, action === 'add-link' ? 'links' : action.section, shortcut);
+						} else if (action.type === 'set-file-pinned') {
+							if (action.pinned) {
+								await appendProjectShortcut(folder.uri, action.section, action.shortcut);
+							} else {
+								await removeProjectFileShortcut(folder.uri, action.section, action.shortcut.target);
+							}
 						} else {
 							const edit = await promptForTaskEdit(action, project);
 							if (!edit || panels.get(key) !== panel) {
@@ -230,10 +257,14 @@ export function activate(context: vscode.ExtensionContext): void {
 							}
 							await editProjectTasks(folder.uri, project.taskRevision, edit);
 						}
-					} catch {
-						void vscode.window.showWarningMessage(action === 'add-link'
-							? vscode.l10n.t("The quick link could not be saved. Check the project details in {0}.", configPath)
-							: vscode.l10n.t("The task update could not be saved. Check the project details in {0} and try again.", configPath));
+					} catch (error) {
+						const shortcutAction = action === 'add-link' || action.type === 'add-file' || action.type === 'set-file-pinned';
+						const message = shortcutAction && error instanceof ProjectDetailsError ? error.message
+							: action === 'add-link' ? vscode.l10n.t("The quick link could not be saved. Check the project details in {0}.", configPath)
+								: action.type === 'add-file' || action.type === 'set-file-pinned'
+									? vscode.l10n.t("The file pin could not be updated. Check the project details in {0}.", configPath)
+									: vscode.l10n.t("The task update could not be saved. Check the project details in {0} and try again.", configPath);
+						void vscode.window.showWarningMessage(message);
 					} finally {
 						editingDetails.delete(key);
 					}

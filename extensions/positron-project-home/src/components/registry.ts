@@ -4,14 +4,14 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { DashboardComponent } from './component';
-import { manuscript, milestones, overview, quickLinks, tasks } from './details';
-import { fileSections } from './files';
+import { manuscript, milestones, quickLinks, tasks } from './details';
+import { data, documentation } from './files';
 import { taskSummary } from './metrics';
 
 /** Registers the available components in their default order. */
 export function createComponents(): ReadonlyMap<string, DashboardComponent> {
 	const components = [
-		overview(), taskSummary(), tasks(), milestones(), manuscript(), quickLinks(), ...fileSections(),
+		taskSummary(), tasks(), milestones(), manuscript(), quickLinks(), documentation(), data(),
 	];
 	return new Map(components.map(component => [component.id, component]));
 }

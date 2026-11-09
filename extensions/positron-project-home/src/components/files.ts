@@ -4,34 +4,49 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
-import { Project } from '../project';
-import { DashboardComponent, empty, FileLabel } from './component';
-import { icon, IconName } from './icons';
+import { FileShortcutSection, ProjectShortcut } from '../project';
+import { ComponentContext, DashboardComponent, empty, list } from './component';
+import { icon, pinIcon } from './icons';
 
-interface FileSectionOptions {
-	readonly label?: FileLabel;
-	readonly icon?: IconName;
+function fileRow(button: ComponentContext['button'], section: FileShortcutSection, file: ProjectShortcut & { uri: vscode.Uri }, pinned: boolean): string {
+	const { label, target, uri } = file;
+	const open = button(label, uri, { leading: section === 'documents' ? icon('file') : undefined, title: target });
+	const pin = button(pinned ? vscode.l10n.t("Unpin {0}", label) : vscode.l10n.t("Pin {0}", label), {
+		type: 'set-file-pinned', section, shortcut: { label, target }, pinned: !pinned,
+	}, { leading: pinIcon(pinned), iconOnly: true });
+	return `<div class="grow">${open}</div>${pin}`;
 }
 
-function fileSection(id: keyof Project['files'], title: string, options: FileSectionOptions = {}): DashboardComponent {
+export function documentation(): DashboardComponent {
 	return {
-		id,
-		title,
+		id: 'docs',
+		title: vscode.l10n.t("Documentation"),
 		columns: 1,
 		nav: true,
-		render({ project: { files }, fileList }) {
+		render({ project: { documents }, button }) {
 			return {
-				headingIcon: options.icon && icon(options.icon),
-				body: files[id].length ? fileList(files[id], options.label) : empty(vscode.l10n.t("No matching files in this project.")),
+				headingIcon: icon('book'),
+				headerAction: { label: vscode.l10n.t("Pin Document"), action: { type: 'add-file', section: 'documents' }, icon: icon('add') },
+				body: documents.length ? list(documents.map(file => fileRow(button, 'documents', file, true)), 'file-list')
+					: empty(vscode.l10n.t("Use + to pin a project document.")),
 			};
 		},
 	};
 }
 
-export function fileSections(): DashboardComponent[] {
-	return [
-		fileSection('docs', vscode.l10n.t("Documentation")),
-		fileSection('data', vscode.l10n.t("Data"), { label: 'name', icon: 'database' }),
-		fileSection('journal', vscode.l10n.t("Journal")),
-	];
+export function data(): DashboardComponent {
+	return {
+		id: 'data',
+		title: vscode.l10n.t("Data"),
+		columns: 1,
+		nav: true,
+		render({ project: { data }, button }) {
+			return {
+				headingIcon: icon('database'),
+				headerAction: { label: vscode.l10n.t("Pin Data File"), action: { type: 'add-file', section: 'data' }, icon: icon('add') },
+				body: data.length ? list(data.map(file => fileRow(button, 'data', file, file.pinned)), 'file-list')
+					: empty(vscode.l10n.t("Use + to pin a project data file.")),
+			};
+		},
+	};
 }

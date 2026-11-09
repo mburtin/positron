@@ -79,7 +79,7 @@ export function renderDashboard(
 		const name = path.slice(path.lastIndexOf('/') + 1);
 		return `<li>${button(label === 'name' ? name : path, uri, label === 'name' ? { title: path } : undefined)}</li>`;
 	}).join('')}</ul>`;
-	const content = project ? renderComponents({ project, resource, button, fileList }, components, layout)
+	const content = project ? renderComponents({ project, button, fileList }, components, layout)
 		: error ? `<section class="card"><h2>${escape(vscode.l10n.t("Project Home Could Not Load"))}</h2>
 			${empty(vscode.l10n.t("Check that the project folder is available and try again."))}</section>`
 			: empty(vscode.l10n.t("Loading project…"));

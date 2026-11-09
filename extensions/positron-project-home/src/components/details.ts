@@ -7,23 +7,6 @@ import * as vscode from 'vscode';
 import { checklist, DashboardComponent, empty, escape, list, progress, status } from './component';
 import { icon } from './icons';
 
-export function overview(): DashboardComponent {
-	return {
-		id: 'overview',
-		title: vscode.l10n.t("Project Overview"),
-		columns: 3,
-		render({ project: { banner, config }, resource }) {
-			return {
-				body: `${banner ? `<img class="banner" alt="" src="${escape(resource(banner))}">` : ''}
-					<div class="identity">
-						${config.description ? `<p>${escape(config.description)}</p>` : empty(vscode.l10n.t("Add a description in the project details."))}
-						${config.tags.length ? list(config.tags.map(tag => `<span class="pill">${escape(tag)}</span>`), 'tags') : ''}
-					</div>`,
-			};
-		},
-	};
-}
-
 export function tasks(): DashboardComponent {
 	return {
 		id: 'tasks',
@@ -109,26 +92,16 @@ export function quickLinks(): DashboardComponent {
 		id: 'quick-links',
 		title: vscode.l10n.t("Quick Links"),
 		columns: 1,
-		render({ project, button }) {
-			const links = project.links.flatMap(({ label, target, isDirectory }) => {
-				if (!target) {
-					return [];
-				}
-				if (!(target instanceof vscode.Uri)) {
-					const host = new URL(target.external.toString(true)).hostname;
-					const iconName = /(^|\.)github\.com$/.test(host) ? 'github' : /(^|\.)zotero\.org$/.test(host) ? 'cap' : 'link';
-					return [button(label, target, { leading: icon(iconName), trailing: icon('external') })];
-				}
-				const path = target.path;
-				const iconName = isDirectory ? 'folder'
-					: /\.(csv|tsv|parquet|rds|rdata|xpt|xlsx|sqlite|feather)$/i.test(path) ? 'database'
-						: /\.(pdf|docx?|md|qmd|rmd)$/i.test(path) ? 'book' : 'file';
-				return [button(label, target, { leading: icon(iconName) })];
+		render({ project: { links }, button }) {
+			const items = links.map(({ label, external }) => {
+				const host = new URL(external.toString()).hostname;
+				const iconName = /(^|\.)github\.com$/.test(host) ? 'github' : /(^|\.)zotero\.org$/.test(host) ? 'cap' : 'link';
+				return button(label, { external }, { leading: icon(iconName), trailing: icon('external') });
 			});
 			return {
 				headingIcon: icon('link'),
 				headerAction: { label: vscode.l10n.t("Add Quick Link"), action: 'add-link', icon: icon('add') },
-				body: links.length ? list(links) : empty(vscode.l10n.t("Use + to add a project file, folder, or website.")),
+				body: items.length ? list(items) : empty(vscode.l10n.t("Use + to add an HTTPS link.")),
 			};
 		},
 	};

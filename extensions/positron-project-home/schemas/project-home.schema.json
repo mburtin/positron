@@ -50,18 +50,38 @@
 		},
 		"links": {
 			"type": "array",
+			"description": "HTTPS shortcuts shown in Quick Links. Legacy project-relative file shortcuts appear in Documentation.",
 			"items": {
 				"type": "object",
 				"required": ["label", "target"],
 				"additionalProperties": false,
 				"properties": {
 					"label": { "type": "string" },
-					"target": { "type": "string", "description": "A project-relative path or an HTTPS URL." }
+					"target": { "type": "string", "description": "An HTTPS URL without credentials." }
 				}
 			}
+		},
+		"documents": {
+			"type": "array",
+			"description": "Pinned files shown in Documentation.",
+			"items": { "$ref": "#/definitions/fileShortcut" }
+		},
+		"data": {
+			"type": "array",
+			"description": "Pinned files shown first in Data.",
+			"items": { "$ref": "#/definitions/fileShortcut" }
 		}
 	},
 	"definitions": {
+		"fileShortcut": {
+			"type": "object",
+			"required": ["label", "target"],
+			"additionalProperties": false,
+			"properties": {
+				"label": { "type": "string" },
+				"target": { "type": "string", "description": "A path to a file relative to the project folder." }
+			}
+		},
 		"task": {
 			"type": "object",
 			"required": ["title"],

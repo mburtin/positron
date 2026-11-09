@@ -4,14 +4,17 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
-import { ChecklistItem, Project, TaskEdit } from '../project';
+import { ChecklistItem, FileShortcutSection, Project, ProjectShortcut, TaskEdit } from '../project';
 
 export type TaskAction = { type: 'add-task' } | { type: 'add-milestone' }
 	| Extract<TaskEdit, { type: 'set-task-done' }>
 	| { type: 'edit-task-notes'; index: number; milestone?: number; title: string; notes: string }
 	| { type: 'move-task'; index: number; milestone?: number; title: string };
 
-export type ProjectAction = vscode.Uri | { external: vscode.Uri } | 'add-link' | TaskAction;
+type FilePinAction = { type: 'add-file'; section: FileShortcutSection }
+	| { type: 'set-file-pinned'; section: FileShortcutSection; shortcut: ProjectShortcut; pinned: boolean };
+
+export type ProjectAction = vscode.Uri | { external: vscode.Uri } | 'add-link' | FilePinAction | TaskAction;
 
 export interface ButtonOptions {
 	readonly leading?: string;
@@ -29,7 +32,6 @@ export type FileLabel = 'path' | 'name';
 
 export interface ComponentContext {
 	readonly project: Project;
-	readonly resource: (uri: vscode.Uri) => string;
 	readonly button: (label: string, action: ProjectAction, options?: ButtonOptions) => string;
 	readonly fileList: (files: readonly vscode.Uri[], label?: FileLabel) => string;
 }

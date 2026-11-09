@@ -7,10 +7,8 @@ import * as vscode from 'vscode';
 import { configPath, createFileIfMissing, encodeSettings, legacyConfigPath, readOptionalFile } from './settings';
 
 const patterns = {
-	docs: '{[Rr][Ee][Aa][Dd][Mm][Ee]*,docs/**,documentation/**}',
 	manuscript: '{manuscript.*,manuscript/**}',
 	data: 'data/**',
-	journal: '{journal.*,journal/**}',
 };
 
 export interface ChecklistItem {
@@ -33,21 +31,24 @@ export interface ProjectMilestone {
 	tasks: ProjectTask[];
 }
 
-export interface ProjectConfig {
+interface ProjectConfig {
 	title?: string;
-	description?: string;
-	tags: string[];
-	banner?: string;
 	tasks: ProjectTask[];
 	manuscript?: { file?: string; sections: ChecklistItem[] };
 	milestones: ProjectMilestone[];
-	links: ProjectLink[];
+	links: ProjectShortcut[];
+	documents: ProjectShortcut[];
+	data: ProjectShortcut[];
 }
 
-interface ProjectLink {
+export interface ProjectShortcut {
 	label: string;
 	target: string;
 }
+
+export type FileShortcutSection = 'documents' | 'data';
+
+type ShortcutSection = 'links' | FileShortcutSection;
 
 type ConfigState = 'missing' | 'invalid' | 'ready';
 
@@ -80,6 +81,15 @@ function readTasks(value: unknown): ProjectTask[] {
 	});
 }
 
+function readShortcuts(value: unknown, trimTarget = false): ProjectShortcut[] {
+	return readItems(value, item => {
+		const label = asText(item.label);
+		const target = item.target;
+		return label && typeof target === 'string' && target.trim()
+			? { label, target: trimTarget ? target.trim() : target } : undefined;
+	});
+}
+
 /** Identifies the task data behind the current dashboard actions. */
 function taskRevision(raw: Record<string, unknown>): string {
 	return JSON.stringify([raw.tasks, raw.milestones]);
@@ -89,9 +99,6 @@ function parseConfig(raw: Record<string, unknown>): ProjectConfig {
 	const manuscript = asRecord(raw.manuscript);
 	return {
 		title: asText(raw.title),
-		description: asText(raw.description),
-		tags: Array.isArray(raw.tags) ? raw.tags.flatMap((item: unknown) => asText(item) ?? []) : [],
-		banner: asText(raw.banner),
 		tasks: readTasks(raw.tasks),
 		manuscript: manuscript && {
 			file: asText(manuscript.file),
@@ -104,11 +111,9 @@ function parseConfig(raw: Record<string, unknown>): ProjectConfig {
 				tasks: readTasks(item.tasks),
 			} : undefined;
 		}).sort((a, b) => (a.date ?? '\uffff').localeCompare(b.date ?? '\uffff')),
-		links: readItems(raw.links, item => {
-			const label = asText(item.label);
-			const target = asText(item.target);
-			return label && target ? { label, target } : undefined;
-		}),
+		links: readShortcuts(raw.links, true),
+		documents: readShortcuts(raw.documents),
+		data: readShortcuts(raw.data),
 	};
 }
 
@@ -148,23 +153,41 @@ export function projectResource(folder: vscode.Uri, path: string): vscode.Uri | 
 	return vscode.Uri.joinPath(folder, ...segments);
 }
 
-/** Resolves both configured links and targets entered in the dashboard. */
-export function resolveLinkTarget(folder: vscode.Uri, target: string): vscode.Uri | { external: vscode.Uri } | undefined {
+/** Accepts HTTPS links without credentials. */
+export function resolveLinkTarget(target: string): vscode.Uri | undefined {
 	if (!/^https:\/\//i.test(target)) {
-		return projectResource(folder, target);
+		return undefined;
 	}
 	try {
 		const url = new URL(target);
-		return url.username || url.password ? undefined : { external: vscode.Uri.parse(url.href) };
+		return url.username || url.password ? undefined : vscode.Uri.parse(url.href);
 	} catch {
 		return undefined;
 	}
 }
 
-/** Appends to the current project details, preserving fields outside the dashboard model. */
-export async function appendProjectLink(folder: vscode.Uri, link: ProjectLink): Promise<void> {
+/** Appends a shortcut to the current project details. */
+export async function appendProjectShortcut(folder: vscode.Uri, key: ShortcutSection, shortcut: ProjectShortcut): Promise<void> {
+	if (key !== 'links' && !projectResource(folder, shortcut.target)) {
+		throw new ProjectDetailsError(vscode.l10n.t("Select a file inside the project folder."));
+	}
 	await updateProjectDetails(folder, raw => {
-		projectItems(raw, 'links').push(link);
+		const items = projectItems(raw, key);
+		if (key === 'links' || !readShortcuts(items).some(item => item.target === shortcut.target)) {
+			items.push(shortcut);
+		}
+	});
+}
+
+/** Removes a pin, including a legacy local shortcut displayed in Documentation. */
+export async function removeProjectFileShortcut(folder: vscode.Uri, section: FileShortcutSection, target: string): Promise<void> {
+	await updateProjectDetails(folder, raw => {
+		if (Array.isArray(raw[section])) {
+			raw[section] = raw[section].filter(item => asRecord(item)?.target !== target);
+		}
+		if (section === 'documents' && Array.isArray(raw.links)) {
+			raw.links = raw.links.filter(item => asText(asRecord(item)?.target) !== target);
+		}
 	});
 }
 
@@ -220,7 +243,7 @@ export async function editProjectTasks(folder: vscode.Uri, revision: string, edi
 }
 
 /** Gets an editable list without discarding malformed project data. */
-function projectItems(raw: Record<string, unknown>, key: 'links' | 'milestones' | 'tasks'): unknown[] {
+function projectItems(raw: Record<string, unknown>, key: ShortcutSection | 'milestones' | 'tasks'): unknown[] {
 	const value = raw[key] === undefined ? raw[key] = [] : raw[key];
 	if (!Array.isArray(value)) {
 		throw new Error('Invalid project details');
@@ -281,8 +304,19 @@ async function stat(uri: vscode.Uri): Promise<vscode.FileStat | undefined> {
 	}
 }
 
-export function isImage(uri: vscode.Uri): boolean {
-	return /\.(png|jpe?g|gif|webp|avif)$/i.test(uri.path);
+/** Resolves pinned files in display order and keeps each target only once. */
+async function loadFileShortcuts(folder: vscode.Uri, shortcuts: ProjectShortcut[]) {
+	const targets = new Set<string>();
+	const files = await Promise.all(shortcuts.map(async ({ label, target }) => {
+		const uri = projectResource(folder, target);
+		if (!uri || targets.has(target)) {
+			return undefined;
+		}
+		targets.add(target);
+		const info = await stat(uri);
+		return info && (info.type & vscode.FileType.Directory) ? undefined : { label, target, uri };
+	}));
+	return files.filter(file => file !== undefined);
 }
 
 export async function loadProject(folder: vscode.WorkspaceFolder, token: vscode.CancellationToken) {
@@ -292,29 +326,35 @@ export async function loadProject(folder: vscode.WorkspaceFolder, token: vscode.
 		return files.filter(uri => vscode.workspace.getWorkspaceFolder(uri)?.uri.toString() === root)
 			.sort((a, b) => a.path.localeCompare(b.path));
 	};
-	const [metadata, docs, manuscript, data, journal] = await Promise.all([
+	const [metadata, manuscript, data] = await Promise.all([
 		readConfig(folder.uri),
-		find(patterns.docs), find(patterns.manuscript), find(patterns.data), find(patterns.journal),
+		find(patterns.manuscript), find(patterns.data),
 	]);
 	const { config } = metadata;
-	const banner = config.banner && projectResource(folder.uri, config.banner);
 	const manuscriptFile = config.manuscript?.file && projectResource(folder.uri, config.manuscript.file);
-	const [bannerStat, manuscriptStat, links] = await Promise.all([
-		banner && isImage(banner) ? stat(banner) : undefined,
+	const links = config.links.flatMap(({ label, target }) => {
+		const external = resolveLinkTarget(target);
+		return external ? [{ label, external }] : [];
+	});
+	// Older projects stored local shortcuts alongside external links.
+	const [manuscriptStat, documents, dataPins] = await Promise.all([
 		manuscriptFile ? stat(manuscriptFile) : undefined,
-		Promise.all(config.links.map(async link => {
-			const target = resolveLinkTarget(folder.uri, link.target);
-			const info = target instanceof vscode.Uri ? await stat(target) : undefined;
-			return { label: link.label, target, isDirectory: !!(info && (info.type & vscode.FileType.Directory)) };
-		})),
+		loadFileShortcuts(folder.uri, [...config.documents, ...config.links]),
+		loadFileShortcuts(folder.uri, config.data),
 	]);
+	const pinnedDataUris = new Set(dataPins.map(({ uri }) => uri.toString()));
+	const rootLength = folder.uri.path.replace(/\/$/, '').length + 1;
+	const detectedData = data.filter(uri => !pinnedDataUris.has(uri.toString())).map(uri => {
+		const target = uri.path.slice(rootLength);
+		return { uri, target, label: target.slice(target.lastIndexOf('/') + 1), pinned: false };
+	});
 	return {
 		...metadata,
 		links,
-		banner: banner && bannerStat?.type === vscode.FileType.File ? banner : undefined,
+		documents,
+		data: [...dataPins.map(file => ({ ...file, pinned: true })), ...detectedData],
 		files: {
-			docs, manuscript: manuscriptFile && manuscriptStat && (manuscriptStat.type & vscode.FileType.File) ? [manuscriptFile, ...manuscript.filter(uri => uri.toString() !== manuscriptFile.toString())] : manuscript,
-			data, journal,
+			manuscript: manuscriptFile && manuscriptStat && (manuscriptStat.type & vscode.FileType.File) ? [manuscriptFile, ...manuscript.filter(uri => uri.toString() !== manuscriptFile.toString())] : manuscript,
 		},
 	};
 }
