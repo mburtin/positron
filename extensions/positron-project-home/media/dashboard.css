@@ -236,6 +236,50 @@ ul {
 	background: var(--vscode-list-hoverBackground);
 }
 
+#heading-quick-links,
+.quick-link {
+	display: flex;
+	align-items: center;
+	gap: var(--vscode-spacing-size80, 8px);
+}
+
+.quick-link span {
+	flex: 1;
+	min-width: 0;
+}
+
+.quick-link-icon {
+	flex: none;
+	width: 16px;
+	height: 16px;
+	color: var(--accent);
+}
+
+.quick-link .quick-link-icon:last-child {
+	width: 12px;
+	height: 12px;
+	color: var(--muted);
+}
+
+.card-action {
+	display: grid;
+	place-items: center;
+	width: 28px;
+	height: 28px;
+	padding: 0;
+	border: 0;
+	border-radius: var(--vscode-cornerRadius-small, 4px);
+	background: transparent;
+}
+
+.card-action .quick-link-icon {
+	color: inherit;
+}
+
+.card-action:hover {
+	background: var(--vscode-toolbar-hoverBackground);
+}
+
 .sr-only {
 	position: absolute;
 	width: 1px;

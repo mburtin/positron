@@ -32,9 +32,12 @@ function renderComponents(
 		`<a href="#${escape(id)}">${escape(title)}</a>`);
 	const cards = layout.map(({ id, columns, rows, anchor }) => {
 		const component = components.get(id)!;
-		const { body } = component.render(context);
+		const { body, headingIcon, headerAction } = component.render(context);
 		return `<section id="${escape(id)}" data-component="${escape(id)}" data-columns="${columns}" data-rows="${rows}"${anchor ? ` data-anchor="${anchor.join(',')}"` : ''} class="card${component.metric ? ' metric' : ''}">
-			<header><h2 id="heading-${escape(id)}">${escape(component.title)}</h2>${moveHandle(component.title)}</header>
+			<header><h2 id="heading-${escape(id)}">${headingIcon ?? ''}${escape(component.title)}</h2>
+				${headerAction ? context.button(headerAction.label, headerAction.action, { leading: headerAction.icon }) : ''}
+				${moveHandle(component.title)}
+			</header>
 			<div class="card-content">${body}</div>
 			${resizeHandles(component.title)}
 		</section>`;
@@ -58,14 +61,17 @@ export function renderDashboard(
 	const nonce = crypto.randomUUID();
 	const resource = (uri: vscode.Uri) => webview.asWebviewUri(uri).toString();
 	const extensionResource = (path: string) => resource(vscode.Uri.joinPath(extensionUri, path));
-	const button = (label: string, action: ProjectAction) => {
+	const button: ComponentContext['button'] = (label, action, icons) => {
 		const id = `${nonce}-${actions.size}`;
 		actions.set(id, action);
-		return `<button type="button" class="file" data-action="${id}"><span>${escape(label)}</span></button>`;
+		if (action === 'add-link') {
+			return `<button type="button" class="card-action" data-action="${id}" aria-label="${escape(label)}" title="${escape(label)}">${icons?.leading ?? ''}</button>`;
+		}
+		return `<button type="button" class="file${icons ? ' quick-link' : ''}" data-action="${id}">${icons?.leading ?? ''}<span>${escape(label)}</span>${icons?.trailing ?? ''}</button>`;
 	};
 	const rootLength = folder.uri.path.replace(/\/$/, '').length + 1;
 	const fileList = (files: readonly vscode.Uri[]) => `<ul>${files.map(uri => `<li>${button(uri.path.slice(rootLength), uri)}</li>`).join('')}</ul>`;
-	const content = project ? renderComponents({ project, folder, resource, button, fileList }, components, layout)
+	const content = project ? renderComponents({ project, resource, button, fileList }, components, layout)
 		: error ? `<section class="card"><h2>${escape(vscode.l10n.t("Project Home Could Not Load"))}</h2>
 			${empty(vscode.l10n.t("Check that the project folder is available and try again."))}</section>`
 			: empty(vscode.l10n.t("Loading project…"));

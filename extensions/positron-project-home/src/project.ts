@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
-import { configPath, createFileIfMissing, legacyConfigPath, readOptionalFile } from './settings';
+import { configPath, createFileIfMissing, encodeSettings, legacyConfigPath, readOptionalFile } from './settings';
 
 const patterns = {
 	docs: '{[Rr][Ee][Aa][Dd][Mm][Ee]*,docs/**,documentation/**}',
@@ -27,7 +27,12 @@ export interface ProjectConfig {
 	tasks: ChecklistItem[];
 	manuscript?: { file?: string; sections: ChecklistItem[] };
 	milestones: { title: string; date: string; done: boolean }[];
-	links: { label: string; target: string }[];
+	links: ProjectLink[];
+}
+
+interface ProjectLink {
+	label: string;
+	target: string;
 }
 
 type ConfigState = 'missing' | 'invalid' | 'ready';
@@ -115,6 +120,46 @@ export function projectResource(folder: vscode.Uri, path: string): vscode.Uri | 
 	return vscode.Uri.joinPath(folder, ...segments);
 }
 
+/** Resolves both configured links and targets entered in the dashboard. */
+export function resolveLinkTarget(folder: vscode.Uri, target: string): vscode.Uri | { external: vscode.Uri } | undefined {
+	if (!/^https:\/\//i.test(target)) {
+		return projectResource(folder, target);
+	}
+	try {
+		const url = new URL(target);
+		return url.username || url.password ? undefined : { external: vscode.Uri.parse(url.href) };
+	} catch {
+		return undefined;
+	}
+}
+
+/** Appends to the current project details, preserving fields outside the dashboard model. */
+export async function appendProjectLink(folder: vscode.Uri, link: ProjectLink): Promise<void> {
+	const uri = vscode.Uri.joinPath(folder, configPath);
+	const current = await readOptionalFile(uri);
+	const document = current && await vscode.workspace.openTextDocument(uri);
+	if (document && (document.isDirty || document.isClosed)) {
+		throw new Error('Project details have unsaved changes');
+	}
+	const legacy = current ? undefined : await readOptionalFile(vscode.Uri.joinPath(folder, legacyConfigPath));
+	const source = document ? document.getText() : legacy ? new TextDecoder().decode(legacy) : '{}';
+	const raw = asRecord(JSON.parse(source));
+	if (!raw || (raw.links !== undefined && !Array.isArray(raw.links))) {
+		throw new Error('Invalid project details');
+	}
+	const updated = { ...raw, links: [...(raw.links ?? []), link] };
+	const edit = new vscode.WorkspaceEdit();
+	if (document) {
+		edit.replace(uri, new vscode.Range(document.positionAt(0), document.positionAt(source.length)),
+			new TextDecoder().decode(encodeSettings(updated)));
+	} else {
+		edit.createFile(uri, { contents: encodeSettings(updated) });
+	}
+	if (!await vscode.workspace.applyEdit(edit) || (document && !await document.save())) {
+		throw new Error('Project details could not be saved');
+	}
+}
+
 async function stat(uri: vscode.Uri): Promise<vscode.FileStat | undefined> {
 	try {
 		return await vscode.workspace.fs.stat(uri);
@@ -141,12 +186,18 @@ export async function loadProject(folder: vscode.WorkspaceFolder, token: vscode.
 	const { config } = metadata;
 	const banner = config.banner && projectResource(folder.uri, config.banner);
 	const manuscriptFile = config.manuscript?.file && projectResource(folder.uri, config.manuscript.file);
-	const [bannerStat, manuscriptStat] = await Promise.all([
+	const [bannerStat, manuscriptStat, links] = await Promise.all([
 		banner && isImage(banner) ? stat(banner) : undefined,
 		manuscriptFile ? stat(manuscriptFile) : undefined,
+		Promise.all(config.links.map(async link => {
+			const target = resolveLinkTarget(folder.uri, link.target);
+			const info = target instanceof vscode.Uri ? await stat(target) : undefined;
+			return { label: link.label, target, isDirectory: !!(info && (info.type & vscode.FileType.Directory)) };
+		})),
 	]);
 	return {
 		...metadata,
+		links,
 		banner: banner && bannerStat?.type === vscode.FileType.File ? banner : undefined,
 		files: {
 			docs, manuscript: manuscriptFile && manuscriptStat && (manuscriptStat.type & vscode.FileType.File) ? [manuscriptFile, ...manuscript.filter(uri => uri.toString() !== manuscriptFile.toString())] : manuscript,

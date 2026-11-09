@@ -6,18 +6,19 @@
 import * as vscode from 'vscode';
 import { ChecklistItem, Project } from '../project';
 
-export type ProjectAction = vscode.Uri | { external: vscode.Uri };
+export type ProjectAction = vscode.Uri | { external: vscode.Uri } | 'add-link';
 
 export interface ComponentContext {
 	readonly project: Project;
-	readonly folder: vscode.WorkspaceFolder;
 	readonly resource: (uri: vscode.Uri) => string;
-	readonly button: (label: string, action: ProjectAction) => string;
+	readonly button: (label: string, action: ProjectAction, icons?: { leading: string; trailing?: string }) => string;
 	readonly fileList: (files: readonly vscode.Uri[]) => string;
 }
 
 export interface ComponentContent {
 	readonly body: string;
+	readonly headingIcon?: string;
+	readonly headerAction?: { label: string; action: ProjectAction; icon: string };
 }
 
 export interface DashboardComponent {

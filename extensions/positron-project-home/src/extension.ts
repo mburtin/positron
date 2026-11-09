@@ -8,10 +8,30 @@ import { ProjectAction } from './components/component';
 import { createComponents } from './components/registry';
 import { renderDashboard } from './dashboard';
 import { loadLayout, resolveLayout, saveLayout } from './layout';
-import { loadProject, Project } from './project';
+import { appendProjectLink, loadProject, Project, resolveLinkTarget } from './project';
 import { configPath, legacyConfigPath } from './settings';
 
 const viewType = 'positron.projectHome';
+
+/** Collects the label and target using the workbench's input controls. */
+async function promptForLink(folder: vscode.Uri) {
+	const label = await vscode.window.showInputBox({
+		title: vscode.l10n.t("Add Quick Link"),
+		prompt: vscode.l10n.t("Enter the name to show on the project home page"),
+		validateInput: value => value.trim() ? undefined : vscode.l10n.t("Enter a link name."),
+	});
+	if (label === undefined) {
+		return undefined;
+	}
+	const target = await vscode.window.showInputBox({
+		title: vscode.l10n.t("Add Quick Link"),
+		prompt: vscode.l10n.t("Enter an HTTPS URL or a path relative to the project folder"),
+		placeHolder: 'https://…',
+		validateInput: value => resolveLinkTarget(folder, value.trim()) ? undefined
+			: vscode.l10n.t("Enter a valid HTTPS URL without credentials or a project-relative path."),
+	});
+	return target === undefined ? undefined : { label: label.trim(), target: target.trim() };
+}
 
 export function activate(context: vscode.ExtensionContext): void {
 	const panels = new Map<string, vscode.WebviewPanel>();
@@ -35,6 +55,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
 		let loading: vscode.CancellationTokenSource | undefined;
 		let actions = new Map<string, ProjectAction>();
+		let addingLink = false;
 		const setPage = (project?: Project, error?: boolean) => {
 			const page = renderDashboard(panel.webview, context.extensionUri, folder, components, layout, project, error);
 			actions = page.actions;
@@ -102,13 +123,33 @@ export function activate(context: vscode.ExtensionContext): void {
 				if (!action) {
 					return;
 				}
+				if (action === 'add-link') {
+					if (addingLink) {
+						return;
+					}
+					addingLink = true;
+					try {
+						const link = await promptForLink(folder.uri);
+						if (link && panels.get(key) === panel) {
+							await appendProjectLink(folder.uri, link);
+							if (panels.get(key) === panel) {
+								void refresh();
+							}
+						}
+					} catch {
+						void vscode.window.showWarningMessage(vscode.l10n.t("The quick link could not be saved. Check the project details in {0}.", configPath));
+					} finally {
+						addingLink = false;
+					}
+					return;
+				}
 				try {
 					if (action instanceof vscode.Uri) {
 						const info = await vscode.workspace.fs.stat(action);
 						const command = info.type & vscode.FileType.Directory ? 'revealInExplorer' : 'vscode.open';
 						await vscode.commands.executeCommand(command, action);
-					} else {
-						await vscode.env.openExternal(action.external);
+					} else if (!await vscode.env.openExternal(action.external)) {
+						throw new Error('The external link could not be opened');
 					}
 				} catch {
 					void vscode.window.showWarningMessage(vscode.l10n.t("The selected project resource could not be opened."));
