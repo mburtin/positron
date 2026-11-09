@@ -8,11 +8,21 @@ import { ChecklistItem, Project } from '../project';
 
 export type ProjectAction = vscode.Uri | { external: vscode.Uri } | 'add-link';
 
+export interface ButtonOptions {
+	readonly leading?: string;
+	readonly trailing?: string;
+	/** Tooltip shown on hover, for labels that do not spell out the full target. */
+	readonly title?: string;
+}
+
+/** Label used for an entry in a file list. */
+export type FileLabel = 'path' | 'name';
+
 export interface ComponentContext {
 	readonly project: Project;
 	readonly resource: (uri: vscode.Uri) => string;
-	readonly button: (label: string, action: ProjectAction, icons?: { leading: string; trailing?: string }) => string;
-	readonly fileList: (files: readonly vscode.Uri[]) => string;
+	readonly button: (label: string, action: ProjectAction, options?: ButtonOptions) => string;
+	readonly fileList: (files: readonly vscode.Uri[], label?: FileLabel) => string;
 }
 
 export interface ComponentContent {
@@ -54,7 +64,7 @@ export function progress(items: ChecklistItem[], label: string): string {
 
 export function status(done: boolean): string {
 	const label = done ? vscode.l10n.t("Done") : vscode.l10n.t("Open");
-	return `<span class="status ${done ? 'done' : ''}"><span aria-hidden="true">${done ? '✓' : '○'}</span><span class="sr-only">${escape(label)}</span></span>`;
+	return `<span class="status ${done ? 'done' : ''}"><span aria-hidden="true">${done ? '&#10003;' : '&#9675;'}</span><span class="sr-only">${escape(label)}</span></span>`;
 }
 
 export function checklist(items: ChecklistItem[]): string {

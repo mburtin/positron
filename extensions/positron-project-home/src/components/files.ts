@@ -5,16 +5,25 @@
 
 import * as vscode from 'vscode';
 import { Project } from '../project';
-import { DashboardComponent, empty } from './component';
+import { DashboardComponent, empty, FileLabel } from './component';
+import { icon, IconName } from './icons';
 
-function fileSection(id: keyof Project['files'], title: string): DashboardComponent {
+interface FileSectionOptions {
+	readonly label?: FileLabel;
+	readonly icon?: IconName;
+}
+
+function fileSection(id: keyof Project['files'], title: string, options: FileSectionOptions = {}): DashboardComponent {
 	return {
 		id,
 		title,
 		columns: 1,
 		nav: true,
 		render({ project: { files }, fileList }) {
-			return { body: files[id].length ? fileList(files[id]) : empty(vscode.l10n.t("No matching files in this project.")) };
+			return {
+				headingIcon: options.icon && icon(options.icon),
+				body: files[id].length ? fileList(files[id], options.label) : empty(vscode.l10n.t("No matching files in this project.")),
+			};
 		},
 	};
 }
@@ -22,7 +31,7 @@ function fileSection(id: keyof Project['files'], title: string): DashboardCompon
 export function fileSections(): DashboardComponent[] {
 	return [
 		fileSection('docs', vscode.l10n.t("Documentation")),
-		fileSection('data', vscode.l10n.t("Data")),
+		fileSection('data', vscode.l10n.t("Data"), { label: 'name', icon: 'database' }),
 		fileSection('journal', vscode.l10n.t("Journal")),
 	];
 }

@@ -236,7 +236,7 @@ ul {
 	background: var(--vscode-list-hoverBackground);
 }
 
-#heading-quick-links,
+.card h2.with-icon,
 .quick-link {
 	display: flex;
 	align-items: center;
@@ -248,14 +248,14 @@ ul {
 	min-width: 0;
 }
 
-.quick-link-icon {
+.icon {
 	flex: none;
 	width: 16px;
 	height: 16px;
 	color: var(--accent);
 }
 
-.quick-link .quick-link-icon:last-child {
+.quick-link .icon:last-child {
 	width: 12px;
 	height: 12px;
 	color: var(--muted);
@@ -272,7 +272,7 @@ ul {
 	background: transparent;
 }
 
-.card-action .quick-link-icon {
+.card-action .icon {
 	color: inherit;
 }
 

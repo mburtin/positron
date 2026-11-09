@@ -11,7 +11,7 @@ import { configPath } from './settings';
 
 function moveHandle(title: string): string {
 	const label = vscode.l10n.t("Move {0} with the arrow keys or drag it", title);
-	return `<span class="drag-handle" draggable="true" tabindex="0" role="group" aria-label="${escape(label)}" title="${escape(label)}">⠿</span>`;
+	return `<span class="drag-handle" draggable="true" tabindex="0" role="group" aria-label="${escape(label)}" title="${escape(label)}">&#10303;</span>`;
 }
 
 function resizeHandles(title: string): string {
@@ -34,7 +34,7 @@ function renderComponents(
 		const component = components.get(id)!;
 		const { body, headingIcon, headerAction } = component.render(context);
 		return `<section id="${escape(id)}" data-component="${escape(id)}" data-columns="${columns}" data-rows="${rows}"${anchor ? ` data-anchor="${anchor.join(',')}"` : ''} class="card${component.metric ? ' metric' : ''}">
-			<header><h2 id="heading-${escape(id)}">${headingIcon ?? ''}${escape(component.title)}</h2>
+			<header><h2 id="heading-${escape(id)}"${headingIcon ? ' class="with-icon"' : ''}>${headingIcon ?? ''}${escape(component.title)}</h2>
 				${headerAction ? context.button(headerAction.label, headerAction.action, { leading: headerAction.icon }) : ''}
 				${moveHandle(component.title)}
 			</header>
@@ -61,16 +61,22 @@ export function renderDashboard(
 	const nonce = crypto.randomUUID();
 	const resource = (uri: vscode.Uri) => webview.asWebviewUri(uri).toString();
 	const extensionResource = (path: string) => resource(vscode.Uri.joinPath(extensionUri, path));
-	const button: ComponentContext['button'] = (label, action, icons) => {
+	const button: ComponentContext['button'] = (label, action, options) => {
 		const id = `${nonce}-${actions.size}`;
 		actions.set(id, action);
 		if (action === 'add-link') {
-			return `<button type="button" class="card-action" data-action="${id}" aria-label="${escape(label)}" title="${escape(label)}">${icons?.leading ?? ''}</button>`;
+			return `<button type="button" class="card-action" data-action="${id}" aria-label="${escape(label)}" title="${escape(label)}">${options?.leading ?? ''}</button>`;
 		}
-		return `<button type="button" class="file${icons ? ' quick-link' : ''}" data-action="${id}">${icons?.leading ?? ''}<span>${escape(label)}</span>${icons?.trailing ?? ''}</button>`;
+		const title = options?.title ? ` title="${escape(options.title)}"` : '';
+		const quickLink = options?.leading || options?.trailing ? ' quick-link' : '';
+		return `<button type="button" class="file${quickLink}" data-action="${id}"${title}>${options?.leading ?? ''}<span>${escape(label)}</span>${options?.trailing ?? ''}</button>`;
 	};
 	const rootLength = folder.uri.path.replace(/\/$/, '').length + 1;
-	const fileList = (files: readonly vscode.Uri[]) => `<ul>${files.map(uri => `<li>${button(uri.path.slice(rootLength), uri)}</li>`).join('')}</ul>`;
+	const fileList: ComponentContext['fileList'] = (files, label = 'path') => `<ul>${files.map(uri => {
+		const path = uri.path.slice(rootLength);
+		const name = path.slice(path.lastIndexOf('/') + 1);
+		return `<li>${button(label === 'name' ? name : path, uri, label === 'name' ? { title: path } : undefined)}</li>`;
+	}).join('')}</ul>`;
 	const content = project ? renderComponents({ project, resource, button, fileList }, components, layout)
 		: error ? `<section class="card"><h2>${escape(vscode.l10n.t("Project Home Could Not Load"))}</h2>
 			${empty(vscode.l10n.t("Check that the project folder is available and try again."))}</section>`
