@@ -14,7 +14,6 @@ import { localize } from '../../../../../nls.js';
 import { isEqual } from '../../../../../base/common/resources.js';
 import { CustomFolderMenuItem } from './customFolderMenuItem.js';
 import { isMacintosh } from '../../../../../base/common/platform.js';
-import { OpenFolderAction } from '../../../actions/workspaceActions.js';
 import { Verbosity } from '../../../../../platform/label/common/label.js';
 import { CustomFolderMenuSeparator } from './customFolderMenuSeparator.js';
 import { ClearRecentWorkspacesAction } from '../../editor/workspaceActions.js';
@@ -28,7 +27,6 @@ import { usePositronReactServicesContext } from '../../../../../base/browser/pos
 import { ILogService } from '../../../../../platform/log/common/log.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
 import { IRecentlyOpened, IRecentFolder, IRecentWorkspace, isRecentWorkspace, isRecentFolder, restoreRecentlyOpened, toStoreData } from '../../../../../platform/workspaces/common/workspaces.js';
-import { PositronNewFolderFromTemplateAction, PositronNewFolderFromGitAction, PositronOpenFolderInNewWindowAction } from '../../../actions/positronActions.js';
 
 /**
  * Constants.
@@ -233,17 +231,9 @@ export const CustomFolderMenuItems = (props: CustomFolderMenuItemsProps) => {
 	// Render.
 	return (
 		<div className='custom-folder-menu-items'>
-			<CommandActionCustomFolderMenuItem id={PositronNewFolderFromTemplateAction.ID} />
-			<CommandActionCustomFolderMenuItem id={PositronNewFolderFromGitAction.ID} />
-			<CustomFolderMenuSeparator />
-			<CommandActionCustomFolderMenuItem
-				id={OpenFolderAction.ID}
-				label={localize('positronOpenFolder', "Open Folder...")} />
-			<CommandActionCustomFolderMenuItem id={PositronOpenFolderInNewWindowAction.ID} />
 			<CommandActionCustomFolderMenuItem
 				id={kCloseFolder}
 				label={localize('positronCloseFolder', "Close Folder")}
-				separator={true}
 				when={ContextKeyExpr.and(
 					WorkbenchStateContext.isEqualTo('folder'),
 					EmptyWorkspaceSupportContext
