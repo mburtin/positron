@@ -115,6 +115,21 @@ const apiMenus: IAPIMenu[] = [
 		id: MenuId.ChatInput,
 		description: localize('menus.ChatInput', "The chat input menu")
 	},
+	{
+		key: 'topActionBar/left',
+		id: MenuId.PositronTopActionBarLeft,
+		description: localize('menus.topActionBarLeft', "The Positron top action bar left region")
+	},
+	{
+		key: 'topActionBar/center',
+		id: MenuId.PositronTopActionBarCenter,
+		description: localize('menus.topActionBarCenter', "The Positron top action bar center region")
+	},
+	{
+		key: 'topActionBar/right',
+		id: MenuId.PositronTopActionBarRight,
+		description: localize('menus.topActionBarRight', "The Positron top action bar right region")
+	},
 	// --- End Positron ---
 	{
 		key: 'editor/title',

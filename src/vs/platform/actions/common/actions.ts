@@ -114,6 +114,9 @@ export class MenuId {
 	static readonly PositronNotebookCellOutputActionContext = new MenuId('PositronNotebookCellOutputActionContext');
 	static readonly EditorActionsLeft = new MenuId('EditorActionsLeft');
 	static readonly EditorActionsRight = new MenuId('EditorActionsRight');
+	static readonly PositronTopActionBarLeft = new MenuId('PositronTopActionBarLeft');
+	static readonly PositronTopActionBarCenter = new MenuId('PositronTopActionBarCenter');
+	static readonly PositronTopActionBarRight = new MenuId('PositronTopActionBarRight');
 	// --- End Positron ---
 	static readonly EditorTitle = new MenuId('EditorTitle');
 	static readonly EditorTitleLayout = new MenuId('EditorTitleLayout');

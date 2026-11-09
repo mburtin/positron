@@ -13,7 +13,11 @@ import { useEffect, useState } from 'react';
 import { Event } from '../../../../base/common/event.js';
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { CommandCenter } from '../../../../platform/commandCenter/common/commandCenter.js';
+import { MenuId } from '../../../../platform/actions/common/actions.js';
 import { PositronActionBar } from '../../../../platform/positronActionBar/browser/positronActionBar.js';
+// The menu hooks are shared with the Positron notebook action bars.
+import { useMenu } from '../../../contrib/positronNotebook/browser/useMenu.js';
+import { useMenuActions } from '../../../contrib/positronNotebook/browser/useMenuActions.js';
 import { ActionBarRegion } from '../../../../platform/positronActionBar/browser/components/actionBarRegion.js';
 import { ActionBarSeparator } from '../../../../platform/positronActionBar/browser/components/actionBarSeparator.js';
 import { ActionBarCommandButton } from '../../../../platform/positronActionBar/browser/components/actionBarCommandButton.js';
@@ -25,10 +29,13 @@ import { TopActionBarCommandCenter } from './components/topActionBarCommandCente
 import { PositronTopActionBarContextProvider } from './positronTopActionBarContext.js';
 import { TopActionBarCustomFolderMenu } from './components/topActionBarCustomFolderMenu.js';
 import { TopActionBarSessionPicker } from './components/topActionBarSessionPicker.js';
+import { useTopActionBarVisibility } from './positronTopActionBarVisibility.js';
+import { hasTopActionBarActions, TopActionBarContributedActions } from './components/topActionBarContributedActions.js';
 import { SAVE_ALL_COMMAND_ID } from '../../../contrib/files/browser/fileConstants.js';
 import { ThemeIcon } from '../../../../base/common/themables.js';
 import { LayoutSettings } from '../../../services/layout/browser/layoutService.js';
 import { usePositronConfiguration } from '../../../../base/browser/positronReactHooks.js';
+import { usePositronReactServicesContext } from '../../../../base/browser/positronReactRendererContext.js';
 
 // Constants.
 const kHorizontalPadding = 4;
@@ -66,6 +73,10 @@ interface PositronTopActionBarProps {
  * @returns The rendered component.
  */
 export const PositronTopActionBar = (props: PositronTopActionBarProps) => {
+	// Context hooks.
+	const services = usePositronReactServicesContext();
+	const contextKeyService = services.contextKeyService;
+
 	// State hooks.
 	const [showCenterUI, setShowCenterUI] = useState(
 		props.positronTopActionBarContainer.width > kCenterUIBreak
@@ -74,8 +85,25 @@ export const PositronTopActionBar = (props: PositronTopActionBarProps) => {
 		props.positronTopActionBarContainer.width > kFulllCenterUIBreak
 	);
 
+	// Elements of the top action bar that can be hidden by an extension.
+	const visibility = useTopActionBarVisibility();
+
+	// Extension-contributed actions for each region of the top action bar.
+	const leftMenu = useMenu(MenuId.PositronTopActionBarLeft, contextKeyService);
+	const leftActions = useMenuActions(leftMenu);
+	const centerMenu = useMenu(MenuId.PositronTopActionBarCenter, contextKeyService);
+	const centerActions = useMenuActions(centerMenu);
+	const rightMenu = useMenu(MenuId.PositronTopActionBarRight, contextKeyService);
+	const rightActions = useMenuActions(rightMenu);
+
 	// When the title bar hosts the command center, suppress the center region here to avoid duplication.
 	const commandCenterInTitleBar = usePositronConfiguration<boolean>(LayoutSettings.COMMAND_CENTER) === true;
+	const showCenterBuiltins = showCenterUI && !commandCenterInTitleBar && (visibility.navigation || visibility.commandCenter);
+	const showCenterRegion = showCenterBuiltins || hasTopActionBarActions(centerActions);
+
+	// When the left region's built-in actions are hidden, don't render a leading separator for the
+	// actions contributed by extensions.
+	const showLeftBuiltins = visibility.newMenu || visibility.openMenu || visibility.saveAll;
 
 	// Main useEffect.
 	useEffect(() => {
@@ -103,47 +131,68 @@ export const PositronTopActionBar = (props: PositronTopActionBarProps) => {
 						paddingRight={kHorizontalPadding}
 					>
 						<ActionBarRegion location='left'>
-							<TopActionBarNewMenu />
-							<ActionBarSeparator />
-							<TopActionBarOpenMenu />
-							<ActionBarSeparator />
-							<ActionBarCommandButton
-								ariaLabel={CommandCenter.title(SAVE_ALL)}
-								commandId={SAVE_ALL}
-								icon={ThemeIcon.fromId('positron-save-all')}
+							{visibility.newMenu && <TopActionBarNewMenu />}
+							{visibility.newMenu && visibility.openMenu && <ActionBarSeparator />}
+							{visibility.openMenu && <TopActionBarOpenMenu />}
+							{(visibility.newMenu || visibility.openMenu) && visibility.saveAll && <ActionBarSeparator />}
+							{visibility.saveAll && (
+								<ActionBarCommandButton
+									ariaLabel={CommandCenter.title(SAVE_ALL)}
+									commandId={SAVE_ALL}
+									icon={ThemeIcon.fromId('positron-save-all')}
+								/>
+							)}
+							<TopActionBarContributedActions
+								actionGroups={leftActions}
+								contextKeyService={contextKeyService}
+								showLeadingSeparator={showLeftBuiltins}
 							/>
 						</ActionBarRegion>
-						{showCenterUI && !commandCenterInTitleBar && (
+						{showCenterRegion && (
 							<ActionBarRegion location='center'>
-								<PositronActionBar nestedActionBar={true}>
-									{showFullCenterUI && (
-										<ActionBarRegion justify='right' location='left' width={60}>
-											<ActionBarCommandButton
-												ariaLabel={CommandCenter.title(NAV_BACK)}
-												commandId={NAV_BACK}
-												icon={ThemeIcon.fromId('chevron-left')}
-											/>
-											<ActionBarCommandButton
-												ariaLabel={CommandCenter.title(NAV_FORWARD)}
-												commandId={NAV_FORWARD}
-												icon={ThemeIcon.fromId('chevron-right')}
-											/>
-										</ActionBarRegion>
-									)}
-									<ActionBarRegion location='center'>
-										<TopActionBarCommandCenter />
-									</ActionBarRegion>
-									{showFullCenterUI && (
-										<ActionBarRegion justify='left' location='right' width={60} />
-									)}
-								</PositronActionBar>
+								{showCenterBuiltins && (
+									<PositronActionBar nestedActionBar={true}>
+										{showFullCenterUI && (
+											<ActionBarRegion justify='right' location='left' width={60}>
+												{visibility.navigation && (
+													<>
+														<ActionBarCommandButton
+															ariaLabel={CommandCenter.title(NAV_BACK)}
+															commandId={NAV_BACK}
+															icon={ThemeIcon.fromId('chevron-left')}
+														/>
+														<ActionBarCommandButton
+															ariaLabel={CommandCenter.title(NAV_FORWARD)}
+															commandId={NAV_FORWARD}
+															icon={ThemeIcon.fromId('chevron-right')}
+														/>
+													</>
+												)}
+											</ActionBarRegion>
+										)}
+										{visibility.commandCenter && (
+											<ActionBarRegion location='center'>
+												<TopActionBarCommandCenter />
+											</ActionBarRegion>
+										)}
+										{showFullCenterUI && (
+											<ActionBarRegion justify='left' location='right' width={60} />
+										)}
+									</PositronActionBar>
+								)}
+								<TopActionBarContributedActions
+									actionGroups={centerActions}
+									contextKeyService={contextKeyService}
+								/>
 							</ActionBarRegion>
 						)}
 						<ActionBarRegion gap={6} location='right'>
-							<TopActionBarSessionPicker />
-							{showCenterUI && (
-								<TopActionBarCustomFolderMenu />
-							)}
+							{visibility.sessionPicker && <TopActionBarSessionPicker />}
+							{showCenterUI && visibility.customFolderMenu && <TopActionBarCustomFolderMenu />}
+							<TopActionBarContributedActions
+								actionGroups={rightActions}
+								contextKeyService={contextKeyService}
+							/>
 						</ActionBarRegion>
 					</PositronActionBar>
 				</div>

@@ -162,6 +162,17 @@ export const IsCompactTitleBarContext = new RawContextKey<boolean>('isCompactTit
 // --- Start Positron ---
 export const PositronTopActionBarFocused = new RawContextKey<boolean>('positronTopActionBarFocused', false, localize('positronTopActionBarFocused', "Whether the Positron Top Action Bar has keyboard focus"));
 export const PositronTopActionBarVisibleContext = new RawContextKey<boolean>('positronTopActionBarVisible', true, localize('positronTopActionBarVisible', "Whether Positron Top Action Bar is visible"));
+
+// Element visibility context keys. Each element of the Positron Top Action Bar defaults to visible
+// and can be hidden by an extension that sets the key to false, e.g.
+// `setContext('positronTopActionBarNewMenuVisible', false)`.
+export const PositronTopActionBarNewMenuVisible = new RawContextKey<boolean>('positronTopActionBarNewMenuVisible', true, localize('positronTopActionBarNewMenuVisible', "Whether the New menu is visible in the Positron Top Action Bar"));
+export const PositronTopActionBarOpenMenuVisible = new RawContextKey<boolean>('positronTopActionBarOpenMenuVisible', true, localize('positronTopActionBarOpenMenuVisible', "Whether the Open menu is visible in the Positron Top Action Bar"));
+export const PositronTopActionBarSaveAllVisible = new RawContextKey<boolean>('positronTopActionBarSaveAllVisible', true, localize('positronTopActionBarSaveAllVisible', "Whether the Save All button is visible in the Positron Top Action Bar"));
+export const PositronTopActionBarNavigationVisible = new RawContextKey<boolean>('positronTopActionBarNavigationVisible', true, localize('positronTopActionBarNavigationVisible', "Whether the back and forward buttons are visible in the Positron Top Action Bar"));
+export const PositronTopActionBarCommandCenterVisible = new RawContextKey<boolean>('positronTopActionBarCommandCenterVisible', true, localize('positronTopActionBarCommandCenterVisible', "Whether the command center is visible in the Positron Top Action Bar"));
+export const PositronTopActionBarSessionPickerVisible = new RawContextKey<boolean>('positronTopActionBarSessionPickerVisible', true, localize('positronTopActionBarSessionPickerVisible', "Whether the session picker is visible in the Positron Top Action Bar"));
+export const PositronTopActionBarCustomFolderMenuVisible = new RawContextKey<boolean>('positronTopActionBarCustomFolderMenuVisible', true, localize('positronTopActionBarCustomFolderMenuVisible', "Whether the custom folder menu is visible in the Positron Top Action Bar"));
 export const PositronConsoleFocused = new RawContextKey<boolean>('positronConsoleFocused', false, localize('positronConsoleFocused', "Whether Positron Console has keyboard focus"));
 export const PositronConsoleTabFocused = new RawContextKey<boolean>('positronConsoleTabFocused', false, localize('positronConsoleTabFocused', "Whether Positron Console Tab has keyboard focus"));
 export const PositronConsoleInputCursorBoundary = new RawContextKey<'none' | 'top' | 'bottom' | 'both'>('positronConsoleInputCursorBoundary', 'none', localize('positronConsoleInputCursorBoundary', "Position of the cursor in the Positron Console input: 'top', 'bottom', 'both', or 'none'"));

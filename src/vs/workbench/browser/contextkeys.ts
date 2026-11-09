@@ -34,7 +34,7 @@ import { IBrowserWorkbenchEnvironmentService } from '../services/environment/bro
 
 // --- Start Positron ---
 // eslint-disable-next-line no-duplicate-imports
-import { PositronTopActionBarVisibleContext } from '../common/contextkeys.js';
+import { PositronTopActionBarVisibleContext, PositronTopActionBarNewMenuVisible, PositronTopActionBarOpenMenuVisible, PositronTopActionBarSaveAllVisible, PositronTopActionBarNavigationVisible, PositronTopActionBarCommandCenterVisible, PositronTopActionBarSessionPickerVisible, PositronTopActionBarCustomFolderMenuVisible } from '../common/contextkeys.js';
 // eslint-disable-next-line no-duplicate-imports
 import { IsPositronContext } from '../../platform/contextkey/common/contextkeys.js';
 // --- End Positron ---
@@ -84,6 +84,7 @@ export class WorkbenchContextKeysHandler extends Disposable {
 
 	// --- Start Positron ---
 	private positronTopActionBarVisibleContext: IContextKey<boolean>;
+	private positronTopActionBarElementVisibleContexts: IContextKey<boolean>[];
 	private isEnabledFileDownloadsKey: IContextKey<boolean>;
 	private isEnabledFileUploadsKey: IContextKey<boolean>;
 	// --- End Positron ---
@@ -229,6 +230,18 @@ export class WorkbenchContextKeysHandler extends Disposable {
 		// Positron Top Action Bar
 		this.positronTopActionBarVisibleContext = PositronTopActionBarVisibleContext.bindTo(this.contextKeyService);
 		this.positronTopActionBarVisibleContext.set(this.layoutService.isVisible(Parts.POSITRON_TOP_ACTION_BAR_PART));
+		// Elements of the Top Action Bar default to visible. Extensions can hide an element by
+		// setting its context key to false.
+		this.positronTopActionBarElementVisibleContexts = [
+			PositronTopActionBarNewMenuVisible,
+			PositronTopActionBarOpenMenuVisible,
+			PositronTopActionBarSaveAllVisible,
+			PositronTopActionBarNavigationVisible,
+			PositronTopActionBarCommandCenterVisible,
+			PositronTopActionBarSessionPickerVisible,
+			PositronTopActionBarCustomFolderMenuVisible,
+		].map(contextKey => contextKey.bindTo(this.contextKeyService));
+		this.positronTopActionBarElementVisibleContexts.forEach(context => context.set(true));
 		// --- End Positron ---
 
 		// Auxiliary Bar
