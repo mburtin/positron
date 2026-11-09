@@ -88,6 +88,7 @@ const compilations = [
 	'extensions/positron-notebooks/tsconfig.json',
 	'extensions/positron-notebook-export/tsconfig.json',
 	'extensions/positron-pdf-server/tsconfig.json',
+	'extensions/positron-project-home/tsconfig.json',
 	'extensions/positron-proxy/tsconfig.json',
 	'extensions/positron-python/tsconfig.json',
 	'extensions/positron-r/tsconfig.json',

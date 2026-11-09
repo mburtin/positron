@@ -1,0 +1,32 @@
+{
+	"$schema": "http://json-schema.org/draft-07/schema#",
+	"title": "NLME Studio Project Home Layout",
+	"description": "The order and size of the cards on the project home page.",
+	"type": "array",
+	"items": {
+		"anyOf": [
+			{ "type": "string" },
+			{
+				"type": "object",
+				"required": ["id"],
+				"properties": {
+					"id": { "type": "string" },
+					"columns": { "type": "integer", "minimum": 1, "maximum": 3 },
+					"rows": { "type": "integer", "minimum": 1, "maximum": 12 },
+					"anchor": {
+						"type": "array",
+						"description": "The starting row, column, and column count for a card anchored by a top-edge resize.",
+						"minItems": 3,
+						"maxItems": 3,
+						"items": [
+							{ "type": "integer", "minimum": 1, "maximum": 1000 },
+							{ "type": "integer", "minimum": 1, "maximum": 3 },
+							{ "type": "integer", "minimum": 1, "maximum": 3 }
+						]
+					}
+				}
+			}
+		]
+	},
+	"uniqueItems": true
+}

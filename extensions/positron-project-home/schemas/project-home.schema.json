@@ -1,0 +1,71 @@
+{
+	"$schema": "http://json-schema.org/draft-07/schema#",
+	"title": "Positron Project Home",
+	"type": "object",
+	"additionalProperties": false,
+	"properties": {
+		"title": { "type": "string" },
+		"description": { "type": "string" },
+		"tags": { "type": "array", "items": { "type": "string" } },
+		"banner": { "type": "string", "description": "Project-relative path to a PNG, JPEG, GIF, WebP or AVIF image." },
+		"tasks": { "type": "array", "items": { "$ref": "#/definitions/checklistItem" } },
+		"manuscript": {
+			"type": "object",
+			"additionalProperties": false,
+			"properties": {
+				"file": { "type": "string", "description": "Project-relative path to the manuscript." },
+				"status": { "type": "string" },
+				"sections": { "type": "array", "items": { "$ref": "#/definitions/checklistItem" } }
+			}
+		},
+		"milestones": {
+			"type": "array",
+			"items": {
+				"type": "object",
+				"required": ["title", "date"],
+				"additionalProperties": false,
+				"properties": {
+					"title": { "type": "string" },
+					"date": { "type": "string", "format": "date" },
+					"done": { "type": "boolean", "default": false }
+				}
+			}
+		},
+		"members": {
+			"type": "array",
+			"items": {
+				"type": "object",
+				"required": ["name"],
+				"additionalProperties": false,
+				"properties": {
+					"name": { "type": "string" },
+					"role": { "type": "string" }
+				}
+			}
+		},
+		"links": {
+			"type": "array",
+			"items": {
+				"type": "object",
+				"required": ["label", "target"],
+				"additionalProperties": false,
+				"properties": {
+					"label": { "type": "string" },
+					"target": { "type": "string", "description": "A project-relative path or an HTTPS URL." }
+				}
+			}
+		}
+	},
+	"definitions": {
+		"checklistItem": {
+			"type": "object",
+			"required": ["title"],
+			"additionalProperties": false,
+			"properties": {
+				"title": { "type": "string" },
+				"done": { "type": "boolean", "default": false },
+				"tag": { "type": "string" }
+			}
+		}
+	}
+}

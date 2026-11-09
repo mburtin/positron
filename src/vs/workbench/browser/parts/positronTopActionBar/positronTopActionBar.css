@@ -13,3 +13,12 @@
 	background-color: var(--vscode-positronActionBar-background);
 	border-bottom: 1px solid var(--vscode-positronActionBar-border);
 }
+
+.top-action-bar-container .action-bar-button.border {
+	height: var(--vscode-positronActionBar-iconSize);
+}
+
+.top-action-bar-container > .positron-action-bar > .action-bar-region-center .action-bar-button.border {
+	min-width: 104px;
+	justify-content: center;
+}

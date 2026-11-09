@@ -1,0 +1,177 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+import * as vscode from 'vscode';
+import { ProjectAction } from './components/component';
+import { createComponents } from './components/registry';
+import { renderDashboard } from './dashboard';
+import { loadLayout, resolveLayout, saveLayout } from './layout';
+import { loadProject, Project } from './project';
+import { configPath, legacyConfigPath } from './settings';
+
+const viewType = 'positron.projectHome';
+
+export function activate(context: vscode.ExtensionContext): void {
+	const panels = new Map<string, vscode.WebviewPanel>();
+	const components = createComponents();
+	const pendingSaves = new Map<string, Promise<void>>();
+
+	const options = (folder: vscode.WorkspaceFolder): vscode.WebviewOptions => ({
+		enableScripts: true,
+		localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'media'), vscode.Uri.joinPath(context.extensionUri, 'out'), folder.uri],
+	});
+
+	const bindPanel = (folder: vscode.WorkspaceFolder, panel: vscode.WebviewPanel) => {
+		const key = folder.uri.toString();
+		const legacyLayout = context.globalState.get(`layout:${key}`);
+		let layout = resolveLayout(components, legacyLayout);
+		let layoutRevision = 0;
+		panels.set(key, panel);
+		panel.webview.options = options(folder);
+		panel.title = vscode.l10n.t("Project: {0}", folder.name);
+		panel.iconPath = new vscode.ThemeIcon('home');
+
+		let loading: vscode.CancellationTokenSource | undefined;
+		let actions = new Map<string, ProjectAction>();
+		const setPage = (project?: Project, error?: boolean) => {
+			const page = renderDashboard(panel.webview, context.extensionUri, folder, components, layout, project, error);
+			actions = page.actions;
+			panel.webview.html = page.html;
+			if (project) {
+				panel.title = vscode.l10n.t("Project: {0}", project.config.title ?? folder.name);
+			}
+		};
+		const refresh = async () => {
+			loading?.cancel();
+			loading?.dispose();
+			const request = new vscode.CancellationTokenSource();
+			loading = request;
+			try {
+				const revision = layoutRevision;
+				const [project, savedLayout] = await Promise.all([
+					loadProject(folder, request.token),
+					(pendingSaves.get(key) ?? Promise.resolve()).then(() => loadLayout(folder.uri, components, legacyLayout)),
+				]);
+				if (loading === request) {
+					if (revision === layoutRevision) {
+						layout = savedLayout;
+					}
+					setPage(project);
+				}
+			} catch {
+				if (loading === request) {
+					setPage(undefined, true);
+				}
+			} finally {
+				if (loading === request) {
+					loading = undefined;
+					request.dispose();
+				}
+			}
+		};
+
+		const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(folder, `{${configPath},${legacyConfigPath}}`));
+		const listeners = vscode.Disposable.from(
+			watcher,
+			watcher.onDidCreate(() => void refresh()),
+			watcher.onDidChange(() => void refresh()),
+			watcher.onDidDelete(() => void refresh()),
+			panel.onDidChangeViewState(event => {
+				if (event.webviewPanel.visible) {
+					void refresh();
+				}
+			}),
+			panel.webview.onDidReceiveMessage(async (message: unknown) => {
+				if (Array.isArray(message)) {
+					const nextLayout = resolveLayout(components, message);
+					layout = nextLayout;
+					layoutRevision++;
+					const save = (pendingSaves.get(key) ?? Promise.resolve()).then(() => saveLayout(folder.uri, nextLayout)).catch(() => {
+						void vscode.window.showWarningMessage(vscode.l10n.t("The project layout could not be saved."));
+					});
+					pendingSaves.set(key, save);
+					await save;
+					if (pendingSaves.get(key) === save) {
+						pendingSaves.delete(key);
+					}
+					return;
+				}
+				const action = typeof message === 'string' ? actions.get(message) : undefined;
+				if (!action) {
+					return;
+				}
+				try {
+					if (action instanceof vscode.Uri) {
+						const info = await vscode.workspace.fs.stat(action);
+						const command = info.type & vscode.FileType.Directory ? 'revealInExplorer' : 'vscode.open';
+						await vscode.commands.executeCommand(command, action);
+					} else {
+						await vscode.env.openExternal(action.external);
+					}
+				} catch {
+					void vscode.window.showWarningMessage(vscode.l10n.t("The selected project resource could not be opened."));
+				}
+			}),
+		);
+		panel.onDidDispose(() => {
+			loading?.cancel();
+			loading?.dispose();
+			loading = undefined;
+			listeners.dispose();
+			panels.delete(key);
+		});
+		setPage();
+		void refresh();
+	};
+
+	const updateActionBar = () => vscode.commands.executeCommand(
+		'setContext', 'positronTopActionBarCommandCenterVisible', !vscode.workspace.workspaceFolders?.length);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand('positron.projectHome.open', async () => {
+			const folders = vscode.workspace.workspaceFolders;
+			if (!folders?.length) {
+				return;
+			}
+			const folder = folders.length === 1 ? folders[0] : (await vscode.window.showQuickPick(
+				folders.map(folder => ({ label: folder.name, description: folder.uri.path, folder })),
+				{ placeHolder: vscode.l10n.t("Select a project to open") },
+			))?.folder;
+			if (!folder || !vscode.workspace.workspaceFolders?.some(candidate => candidate.uri.toString() === folder.uri.toString())) {
+				return;
+			}
+			const panel = panels.get(folder.uri.toString());
+			if (panel) {
+				panel.reveal();
+			} else {
+				bindPanel(folder, vscode.window.createWebviewPanel(viewType, folder.name, vscode.ViewColumn.Active, options(folder)));
+			}
+		}),
+		vscode.window.registerWebviewPanelSerializer(viewType, {
+			async deserializeWebviewPanel(panel, state: { folder?: string } | undefined) {
+				const folder = vscode.workspace.workspaceFolders?.find(folder => folder.uri.toString() === state?.folder);
+				if (folder && !panels.has(folder.uri.toString())) {
+					bindPanel(folder, panel);
+				} else {
+					panel.dispose();
+				}
+			},
+		}),
+		vscode.workspace.onDidChangeWorkspaceFolders(event => {
+			for (const folder of event.removed) {
+				panels.get(folder.uri.toString())?.dispose();
+			}
+			void updateActionBar();
+		}),
+		new vscode.Disposable(() => {
+			for (const panel of panels.values()) {
+				panel.dispose();
+			}
+			void vscode.commands.executeCommand('setContext', 'positronTopActionBarCommandCenterVisible', true);
+		}),
+	);
+	void updateActionBar();
+}
+

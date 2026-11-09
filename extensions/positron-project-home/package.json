@@ -1,0 +1,63 @@
+{
+	"name": "positron-project-home",
+	"displayName": "%displayName%",
+	"description": "%description%",
+	"version": "0.0.1",
+	"publisher": "positron",
+	"private": true,
+	"license": "MIT",
+	"engines": {
+		"vscode": "^1.74.0"
+	},
+	"main": "./out/extension.js",
+	"extensionKind": ["ui"],
+	"activationEvents": [
+		"onStartupFinished",
+		"onWebviewPanel:positron.projectHome"
+	],
+	"capabilities": {
+		"virtualWorkspaces": true,
+		"untrustedWorkspaces": {
+			"supported": true
+		}
+	},
+	"contributes": {
+		"commands": [
+			{
+				"command": "positron.projectHome.open",
+				"title": "%command.home%",
+				"category": "Positron",
+				"icon": "$(home)",
+				"actionBarOptions": {
+					"controlType": "button",
+					"displayTitle": true,
+					"border": true
+				}
+			}
+		],
+		"menus": {
+			"topActionBar/center": [
+				{
+					"command": "positron.projectHome.open",
+					"when": "workspaceFolderCount > 0 && !positronTopActionBarCommandCenterVisible"
+				}
+			],
+			"commandPalette": [
+				{
+					"command": "positron.projectHome.open",
+					"when": "workspaceFolderCount > 0"
+				}
+			]
+		},
+		"jsonValidation": [
+			{
+				"fileMatch": ["**/.nlme-studio/project-home.json", "**/.positron/project-home.json"],
+				"url": "./schemas/project-home.schema.json"
+			},
+			{
+				"fileMatch": "**/.nlme-studio/project-home-layout.json",
+				"url": "./schemas/project-home-layout.schema.json"
+			}
+		]
+	}
+}

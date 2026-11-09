@@ -1055,6 +1055,10 @@ namespace schema {
 						displayTitle: {
 							description: localize('vscode.extension.contributes.commandType.actionBarOptions.displayTitle', 'A value which indicates whether to display the title on an action bar.'),
 							type: 'boolean'
+						},
+						border: {
+							description: localize('vscode.extension.contributes.commandType.actionBarOptions.border', 'Whether to display a border around the action bar button.'),
+							type: 'boolean'
 						}
 					}
 				},

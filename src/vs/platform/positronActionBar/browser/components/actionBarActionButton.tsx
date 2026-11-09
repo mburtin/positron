@@ -87,6 +87,8 @@ export const ActionBarActionButton = (props: ActionBarActionButtonProps) => {
 
 	// Get the menu item action.
 	const menuItemAction = toMenuItemAction(props.action);
+	const actionBarOptions = menuItemAction?.positronActionBarOptions;
+	const buttonOptions = isPositronActionBarButtonOptions(actionBarOptions) ? actionBarOptions : undefined;
 
 	// State hooks.
 	const [, setMouseInside, mouseInsideRef] = useStateRef(false);
@@ -125,13 +127,11 @@ export const ActionBarActionButton = (props: ActionBarActionButtonProps) => {
 		<ActionBarButton
 			ref={buttonRef}
 			ariaLabel={action.label ?? action.tooltip}
+			border={buttonOptions?.border === true}
 			checked={action.checked}
 			disabled={!action.enabled}
 			icon={menuItemAction?.item.icon}
-			label={isPositronActionBarButtonOptions(menuItemAction?.positronActionBarOptions) && menuItemAction.positronActionBarOptions.displayTitle ?
-				action.label :
-				undefined
-			}
+			label={buttonOptions?.displayTitle ? action.label : undefined}
 			tooltip={actionTooltip(
 				services.contextKeyService,
 				services.keybindingService,

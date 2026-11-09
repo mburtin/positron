@@ -99,7 +99,17 @@ export const PositronTopActionBar = (props: PositronTopActionBarProps) => {
 	// When the title bar hosts the command center, suppress the center region here to avoid duplication.
 	const commandCenterInTitleBar = usePositronConfiguration<boolean>(LayoutSettings.COMMAND_CENTER) === true;
 	const showCenterBuiltins = showCenterUI && !commandCenterInTitleBar && (visibility.navigation || visibility.commandCenter);
-	const showCenterRegion = showCenterBuiltins || hasTopActionBarActions(centerActions);
+	const hasCenterActions = hasTopActionBarActions(centerActions);
+	const showCenterRegion = showCenterBuiltins || hasCenterActions;
+	// When navigation remains visible, place replacement actions between the two equal-width
+	// side regions, where the command center was.
+	const replaceCommandCenter = showCenterBuiltins && !visibility.commandCenter && hasCenterActions;
+	const contributedCenterActions = (
+		<TopActionBarContributedActions
+			actionGroups={centerActions}
+			contextKeyService={contextKeyService}
+		/>
+	);
 
 	// When the left region's built-in actions are hidden, don't render a leading separator for the
 	// actions contributed by extensions.
@@ -170,9 +180,9 @@ export const PositronTopActionBar = (props: PositronTopActionBarProps) => {
 												)}
 											</ActionBarRegion>
 										)}
-										{visibility.commandCenter && (
+										{(visibility.commandCenter || replaceCommandCenter) && (
 											<ActionBarRegion location='center'>
-												<TopActionBarCommandCenter />
+												{replaceCommandCenter ? contributedCenterActions : <TopActionBarCommandCenter />}
 											</ActionBarRegion>
 										)}
 										{showFullCenterUI && (
@@ -180,10 +190,7 @@ export const PositronTopActionBar = (props: PositronTopActionBarProps) => {
 										)}
 									</PositronActionBar>
 								)}
-								<TopActionBarContributedActions
-									actionGroups={centerActions}
-									contextKeyService={contextKeyService}
-								/>
+								{!replaceCommandCenter && contributedCenterActions}
 							</ActionBarRegion>
 						)}
 						<ActionBarRegion gap={6} location='right'>

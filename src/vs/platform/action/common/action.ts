@@ -74,6 +74,7 @@ export interface ICommandActionSource {
 export type PositronActionBarButtonOptions = {
 	controlType: 'button';
 	displayTitle: boolean;
+	border?: boolean;
 };
 
 export type PositronActionBarCheckboxOptions = {
