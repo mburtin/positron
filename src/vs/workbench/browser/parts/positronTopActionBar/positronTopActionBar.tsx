@@ -10,8 +10,11 @@ import './positronTopActionBar.css';
 import { useEffect, useState } from 'react';
 
 // Other dependencies.
+import { Codicon } from '../../../../base/common/codicons.js';
 import { Event } from '../../../../base/common/event.js';
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
+import { isNative } from '../../../../base/common/platform.js';
+import { BrowserViewCommandId } from '../../../../platform/browserView/common/browserView.js';
 import { CommandCenter } from '../../../../platform/commandCenter/common/commandCenter.js';
 import { MenuId } from '../../../../platform/actions/common/actions.js';
 import { PositronActionBar } from '../../../../platform/positronActionBar/browser/positronActionBar.js';
@@ -21,7 +24,6 @@ import { useMenuActions } from '../../../contrib/positronNotebook/browser/useMen
 import { ActionBarRegion } from '../../../../platform/positronActionBar/browser/components/actionBarRegion.js';
 import { ActionBarSeparator } from '../../../../platform/positronActionBar/browser/components/actionBarSeparator.js';
 import { ActionBarCommandButton } from '../../../../platform/positronActionBar/browser/components/actionBarCommandButton.js';
-import { NavigateBackwardsAction, NavigateForwardAction } from '../editor/editorActions.js';
 import { PositronActionBarContextProvider } from '../../../../platform/positronActionBar/browser/positronActionBarContext.js';
 import { TopActionBarNewMenu } from './components/topActionBarNewMenu.js';
 import { TopActionBarOpenMenu } from './components/topActionBarOpenMenu.js';
@@ -42,8 +44,6 @@ const kHorizontalPadding = 4;
 const kCenterUIBreak = 600;
 const kFulllCenterUIBreak = 765;
 const SAVE_ALL = SAVE_ALL_COMMAND_ID;
-const NAV_BACK = NavigateBackwardsAction.ID;
-const NAV_FORWARD = NavigateForwardAction.ID;
 
 /**
  * IPositronTopActionBarContainer interface.
@@ -98,10 +98,11 @@ export const PositronTopActionBar = (props: PositronTopActionBarProps) => {
 
 	// When the title bar hosts the command center, suppress the center region here to avoid duplication.
 	const commandCenterInTitleBar = usePositronConfiguration<boolean>(LayoutSettings.COMMAND_CENTER) === true;
-	const showCenterBuiltins = showCenterUI && !commandCenterInTitleBar && (visibility.navigation || visibility.commandCenter);
+	const showBrowserButton = isNative && showFullCenterUI && visibility.navigation;
+	const showCenterBuiltins = showCenterUI && !commandCenterInTitleBar && (showBrowserButton || visibility.commandCenter);
 	const hasCenterActions = hasTopActionBarActions(centerActions);
 	const showCenterRegion = showCenterBuiltins || hasCenterActions;
-	// When navigation remains visible, place replacement actions between the two equal-width
+	// When the browser button remains visible, place replacement actions between the two equal-width
 	// side regions, where the command center was.
 	const replaceCommandCenter = showCenterBuiltins && !visibility.commandCenter && hasCenterActions;
 	const contributedCenterActions = (
@@ -164,19 +165,12 @@ export const PositronTopActionBar = (props: PositronTopActionBarProps) => {
 									<PositronActionBar nestedActionBar={true}>
 										{showFullCenterUI && (
 											<ActionBarRegion justify='right' location='left' width={60}>
-												{visibility.navigation && (
-													<>
-														<ActionBarCommandButton
-															ariaLabel={CommandCenter.title(NAV_BACK)}
-															commandId={NAV_BACK}
-															icon={ThemeIcon.fromId('chevron-left')}
-														/>
-														<ActionBarCommandButton
-															ariaLabel={CommandCenter.title(NAV_FORWARD)}
-															commandId={NAV_FORWARD}
-															icon={ThemeIcon.fromId('chevron-right')}
-														/>
-													</>
+												{showBrowserButton && (
+													<ActionBarCommandButton
+														ariaLabel={CommandCenter.title(BrowserViewCommandId.Open)}
+														commandId={BrowserViewCommandId.Open}
+														icon={Codicon.globe}
+													/>
 												)}
 											</ActionBarRegion>
 										)}
