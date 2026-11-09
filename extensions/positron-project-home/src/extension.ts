@@ -12,6 +12,7 @@ import { appendProjectShortcut, editProjectTasks, FileShortcutSection, loadProje
 import { configPath, legacyConfigPath } from './settings';
 
 const viewType = 'positron.projectHome';
+const clientRoot = vscode.Uri.file(__dirname);
 
 /** Collects the label and target using the workbench's input controls. */
 async function promptForLink() {
@@ -98,7 +99,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
 	const options = (folder: vscode.WorkspaceFolder): vscode.WebviewOptions => ({
 		enableScripts: true,
-		localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'media'), vscode.Uri.joinPath(context.extensionUri, 'out'), folder.uri],
+		localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'media'), clientRoot, folder.uri],
 	});
 
 	const bindPanel = (folder: vscode.WorkspaceFolder, panel: vscode.WebviewPanel) => {
@@ -119,7 +120,7 @@ export function activate(context: vscode.ExtensionContext): void {
 			if (notesEditor) {
 				return;
 			}
-			const page = renderDashboard(panel.webview, context.extensionUri, folder, components, layout, project, error);
+			const page = renderDashboard(panel.webview, context.extensionUri, clientRoot, folder, components, layout, project, error);
 			actions = page.actions;
 			renderedProject = project;
 			panel.webview.html = page.html;
@@ -297,13 +298,11 @@ export function activate(context: vscode.ExtensionContext): void {
 		void refresh();
 	};
 
-	const updateActionBar = () => vscode.commands.executeCommand(
-		'setContext', 'positronTopActionBarCommandCenterVisible', !vscode.workspace.workspaceFolders?.length);
-
 	context.subscriptions.push(
 		vscode.commands.registerCommand('positron.projectHome.open', async () => {
 			const folders = vscode.workspace.workspaceFolders;
 			if (!folders?.length) {
+				await vscode.commands.executeCommand('workbench.action.files.openFolder');
 				return;
 			}
 			const folder = folders.length === 1 ? folders[0] : (await vscode.window.showQuickPick(
@@ -334,15 +333,12 @@ export function activate(context: vscode.ExtensionContext): void {
 			for (const folder of event.removed) {
 				panels.get(folder.uri.toString())?.dispose();
 			}
-			void updateActionBar();
 		}),
 		new vscode.Disposable(() => {
 			for (const panel of panels.values()) {
 				panel.dispose();
 			}
-			void vscode.commands.executeCommand('setContext', 'positronTopActionBarCommandCenterVisible', true);
 		}),
 	);
-	void updateActionBar();
 }
 

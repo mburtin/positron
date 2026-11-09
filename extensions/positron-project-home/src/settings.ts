@@ -5,7 +5,7 @@
 
 import * as vscode from 'vscode';
 
-export const settingsDirectory = '.nlme-studio';
+export const settingsDirectory = '.nlm-studio';
 export const configPath = `${settingsDirectory}/project-home.json`;
 export const layoutPath = `${settingsDirectory}/project-home-layout.json`;
 export const legacyConfigPath = '.positron/project-home.json';

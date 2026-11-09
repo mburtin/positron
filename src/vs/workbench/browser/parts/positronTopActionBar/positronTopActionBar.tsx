@@ -16,7 +16,7 @@ import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { isNative } from '../../../../base/common/platform.js';
 import { BrowserViewCommandId } from '../../../../platform/browserView/common/browserView.js';
 import { CommandCenter } from '../../../../platform/commandCenter/common/commandCenter.js';
-import { MenuId } from '../../../../platform/actions/common/actions.js';
+import { MenuId, MenuRegistry } from '../../../../platform/actions/common/actions.js';
 import { PositronActionBar } from '../../../../platform/positronActionBar/browser/positronActionBar.js';
 // The menu hooks are shared with the Positron notebook action bars.
 import { useMenu } from '../../../contrib/positronNotebook/browser/useMenu.js';
@@ -38,12 +38,14 @@ import { ThemeIcon } from '../../../../base/common/themables.js';
 import { LayoutSettings } from '../../../services/layout/browser/layoutService.js';
 import { usePositronConfiguration } from '../../../../base/browser/positronReactHooks.js';
 import { usePositronReactServicesContext } from '../../../../base/browser/positronReactRendererContext.js';
+import { IExtensionService } from '../../../services/extensions/common/extensions.js';
 
 // Constants.
 const kHorizontalPadding = 4;
 const kCenterUIBreak = 600;
 const kFulllCenterUIBreak = 765;
 const SAVE_ALL = SAVE_ALL_COMMAND_ID;
+const PROJECT_HOME_COMMAND = 'positron.projectHome.open';
 
 /**
  * IPositronTopActionBarContainer interface.
@@ -76,6 +78,7 @@ export const PositronTopActionBar = (props: PositronTopActionBarProps) => {
 	// Context hooks.
 	const services = usePositronReactServicesContext();
 	const contextKeyService = services.contextKeyService;
+	const extensionService = services.get(IExtensionService);
 
 	// State hooks.
 	const [showCenterUI, setShowCenterUI] = useState(
@@ -84,6 +87,11 @@ export const PositronTopActionBar = (props: PositronTopActionBarProps) => {
 	const [showFullCenterUI, setShowFullCenterUI] = useState(
 		props.positronTopActionBarContainer.width > kFulllCenterUIBreak
 	);
+	const [extensionsRegistered, setExtensionsRegistered] = useState(false);
+
+	useEffect(() => {
+		void extensionService.whenInstalledExtensionsRegistered().then(setExtensionsRegistered);
+	}, [extensionService]);
 
 	// Elements of the top action bar that can be hidden by an extension.
 	const visibility = useTopActionBarVisibility();
@@ -96,15 +104,19 @@ export const PositronTopActionBar = (props: PositronTopActionBarProps) => {
 	const rightMenu = useMenu(MenuId.PositronTopActionBarRight, contextKeyService);
 	const rightActions = useMenuActions(rightMenu);
 
+	// Defer the search box until we know whether Home is contributed.
+	// Read the registry directly because the React menu snapshot updates asynchronously.
+	const showCommandCenter = visibility.commandCenter && extensionsRegistered && !MenuRegistry.getCommand(PROJECT_HOME_COMMAND);
+
 	// When the title bar hosts the command center, suppress the center region here to avoid duplication.
 	const commandCenterInTitleBar = usePositronConfiguration<boolean>(LayoutSettings.COMMAND_CENTER) === true;
 	const showBrowserButton = isNative && showFullCenterUI && visibility.navigation;
-	const showCenterBuiltins = showCenterUI && !commandCenterInTitleBar && (showBrowserButton || visibility.commandCenter);
+	const showCenterBuiltins = showCenterUI && !commandCenterInTitleBar && (showBrowserButton || showCommandCenter);
 	const hasCenterActions = hasTopActionBarActions(centerActions);
 	const showCenterRegion = showCenterBuiltins || hasCenterActions;
 	// When the browser button remains visible, place replacement actions between the two equal-width
 	// side regions, where the command center was.
-	const replaceCommandCenter = showCenterBuiltins && !visibility.commandCenter && hasCenterActions;
+	const replaceCommandCenter = showCenterBuiltins && !showCommandCenter && hasCenterActions;
 	const contributedCenterActions = (
 		<TopActionBarContributedActions
 			actionGroups={centerActions}
@@ -174,7 +186,7 @@ export const PositronTopActionBar = (props: PositronTopActionBarProps) => {
 												)}
 											</ActionBarRegion>
 										)}
-										{(visibility.commandCenter || replaceCommandCenter) && (
+										{(showCommandCenter || replaceCommandCenter) && (
 											<ActionBarRegion location='center'>
 												{replaceCommandCenter ? contributedCenterActions : <TopActionBarCommandCenter />}
 											</ActionBarRegion>

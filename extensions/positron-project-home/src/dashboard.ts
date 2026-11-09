@@ -51,6 +51,7 @@ function renderComponents(
 export function renderDashboard(
 	webview: vscode.Webview,
 	extensionUri: vscode.Uri,
+	clientRoot: vscode.Uri,
 	folder: vscode.WorkspaceFolder,
 	components: ReadonlyMap<string, DashboardComponent>,
 	layout: readonly CardPlacement[],
@@ -124,7 +125,7 @@ export function renderDashboard(
 			</div>
 		</form>
 	</dialog>` : ''}
-	<script nonce="${nonce}" src="${escape(extensionResource('out/dashboardClient.js'))}"></script>
+	<script nonce="${nonce}" src="${escape(resource(vscode.Uri.joinPath(clientRoot, 'dashboardClient.js')))}"></script>
 </body>
 </html>`,
 	};

@@ -12,7 +12,6 @@
 	"main": "./out/extension.js",
 	"extensionKind": ["ui"],
 	"activationEvents": [
-		"onStartupFinished",
 		"onWebviewPanel:positron.projectHome"
 	],
 	"capabilities": {
@@ -38,24 +37,17 @@
 		"menus": {
 			"topActionBar/center": [
 				{
-					"command": "positron.projectHome.open",
-					"when": "workspaceFolderCount > 0 && !positronTopActionBarCommandCenterVisible"
-				}
-			],
-			"commandPalette": [
-				{
-					"command": "positron.projectHome.open",
-					"when": "workspaceFolderCount > 0"
+					"command": "positron.projectHome.open"
 				}
 			]
 		},
 		"jsonValidation": [
 			{
-				"fileMatch": ["**/.nlme-studio/project-home.json", "**/.positron/project-home.json"],
+				"fileMatch": ["**/.nlm-studio/project-home.json", "**/.positron/project-home.json"],
 				"url": "./schemas/project-home.schema.json"
 			},
 			{
-				"fileMatch": "**/.nlme-studio/project-home-layout.json",
+				"fileMatch": "**/.nlm-studio/project-home-layout.json",
 				"url": "./schemas/project-home-layout.schema.json"
 			}
 		]
