@@ -30,9 +30,36 @@ export function tasks(): DashboardComponent {
 		title: vscode.l10n.t("Tasks"),
 		columns: 2,
 		nav: true,
-		render({ project: { config } }) {
+		render({ project: { config }, button }) {
+			const open: string[] = [];
+			const completed: string[] = [];
+			for (const milestone of [undefined, ...config.milestones]) {
+				for (const item of milestone?.tasks ?? config.tasks) {
+					const target = { milestone: milestone?.index, index: item.index };
+					const toggle = button(item.title, { ...target, type: 'set-task-done', done: !item.done }, {
+						iconOnly: true, leading: status(item.done), checked: item.done,
+					});
+					const hasNotes = !!item.notes?.trim();
+					const notes = button(hasNotes ? vscode.l10n.t("Edit Notes for {0}", item.title) : vscode.l10n.t("Add Notes for {0}", item.title), {
+						...target, type: 'edit-task-notes', title: item.title, notes: item.notes ?? '',
+					}, { iconOnly: true, opensDialog: true, leading: icon(hasNotes ? 'written-note' : 'note') });
+					const move = config.milestones.length ? button(milestone?.title ?? vscode.l10n.t("Assign Milestone"), {
+						...target, type: 'move-task', title: item.title,
+					}, { title: vscode.l10n.t("Move Task: {0}", item.title) }) : '';
+					(item.done ? completed : open).push(`${toggle}<div class="grow">${escape(item.title)}
+						${move ? `<div class="task-milestone">${move}</div>` : ''}</div>
+						${item.tag ? `<span class="pill">${escape(item.tag)}</span>` : ''}${notes}`);
+				}
+			}
+			const activeTasks = open.length ? list(open, 'task-list')
+				: empty(completed.length ? vscode.l10n.t("No open tasks.") : vscode.l10n.t("Use + to add a task."));
 			return {
-				body: config.tasks.length ? checklist(config.tasks) : empty(vscode.l10n.t("Add tasks in the project details to track progress.")),
+				headingIcon: icon('tasks'),
+				headerAction: { label: vscode.l10n.t("Add Task"), action: { type: 'add-task' }, icon: icon('add') },
+				body: `${activeTasks}${completed.length ? `<details id="completed-tasks">
+					<summary>${escape(vscode.l10n.t("Completed Tasks ({0})", completed.length))}</summary>
+					${list(completed, 'task-list')}
+				</details>` : ''}`,
 			};
 		},
 	};
@@ -61,9 +88,17 @@ export function milestones(): DashboardComponent {
 		columns: 1,
 		render({ project: { config } }) {
 			return {
-				body: config.milestones.length ? list(config.milestones.map(item => `${status(item.done)}
-					<span class="grow">${escape(item.title)}</span><span class="muted">${escape(item.date)}</span>`))
-					: empty(vscode.l10n.t("No milestones defined.")),
+				headingIcon: icon('milestone'),
+				headerAction: { label: vscode.l10n.t("Add Milestone"), action: { type: 'add-milestone' }, icon: icon('add') },
+				body: config.milestones.length ? list(config.milestones.map(item => {
+					const done = item.tasks.filter(task => task.done).length;
+					return `${status(item.legacyDone || (item.tasks.length > 0 && done === item.tasks.length))}
+						<div class="grow">${escape(item.title)}
+							${progress(item.tasks, vscode.l10n.t("Progress for {0}", item.title))}
+							<p class="muted">${escape(item.tasks.length ? vscode.l10n.t("{0} of {1} tasks complete", done, item.tasks.length)
+								: vscode.l10n.t("No tasks yet."))}</p>
+						</div>${item.date ? `<span class="muted">${escape(item.date)}</span>` : ''}`;
+				})) : empty(vscode.l10n.t("Use + to add a milestone.")),
 			};
 		},
 	};

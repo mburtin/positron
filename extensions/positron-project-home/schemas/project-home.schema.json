@@ -8,7 +8,7 @@
 		"description": { "type": "string" },
 		"tags": { "type": "array", "items": { "type": "string" } },
 		"banner": { "type": "string", "description": "Project-relative path to a PNG, JPEG, GIF, WebP or AVIF image." },
-		"tasks": { "type": "array", "items": { "$ref": "#/definitions/checklistItem" } },
+		"tasks": { "type": "array", "items": { "$ref": "#/definitions/task" } },
 		"manuscript": {
 			"type": "object",
 			"additionalProperties": false,
@@ -22,12 +22,17 @@
 			"type": "array",
 			"items": {
 				"type": "object",
-				"required": ["title", "date"],
+				"required": ["title"],
 				"additionalProperties": false,
 				"properties": {
 					"title": { "type": "string" },
 					"date": { "type": "string", "format": "date" },
-					"done": { "type": "boolean", "default": false }
+					"done": { "type": "boolean", "default": false, "description": "Legacy completion status for a milestone without a tasks list." },
+					"tasks": {
+						"type": "array",
+						"description": "Tasks in this milestone. Its progress is calculated from these tasks.",
+						"items": { "$ref": "#/definitions/task" }
+					}
 				}
 			}
 		},
@@ -57,6 +62,17 @@
 		}
 	},
 	"definitions": {
+		"task": {
+			"type": "object",
+			"required": ["title"],
+			"additionalProperties": false,
+			"properties": {
+				"title": { "type": "string" },
+				"done": { "type": "boolean", "default": false },
+				"tag": { "type": "string" },
+				"notes": { "type": "string", "description": "Multiline notes for the task." }
+			}
+		},
 		"checklistItem": {
 			"type": "object",
 			"required": ["title"],

@@ -4,18 +4,22 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
-import { DashboardComponent, escape } from './component';
+import { DashboardComponent, escape, progress } from './component';
+import { icon } from './icons';
 
 export function taskSummary(): DashboardComponent {
 	return {
 		id: 'task-summary',
-		title: vscode.l10n.t("Task Summary"),
+		title: vscode.l10n.t("Task Progress"),
 		columns: 1,
 		metric: true,
 		render({ project: { config } }) {
-			const done = config.tasks.filter(task => task.done).length;
+			const tasks = [...config.tasks, ...config.milestones.flatMap(milestone => milestone.tasks)];
+			const done = tasks.filter(task => task.done).length;
 			return {
-				body: `<strong>${done} / ${config.tasks.length}</strong><p class="muted">${escape(vscode.l10n.t("{0} open", config.tasks.length - done))}</p>`,
+				headingIcon: icon('progress'),
+				body: `<strong>${done} / ${tasks.length}</strong>${progress(tasks, this.title)}
+					<p class="muted">${escape(vscode.l10n.t("{0} open", tasks.length - done))}</p>`,
 			};
 		},
 	};

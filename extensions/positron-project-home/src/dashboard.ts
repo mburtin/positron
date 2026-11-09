@@ -35,7 +35,7 @@ function renderComponents(
 		const { body, headingIcon, headerAction } = component.render(context);
 		return `<section id="${escape(id)}" data-component="${escape(id)}" data-columns="${columns}" data-rows="${rows}"${anchor ? ` data-anchor="${anchor.join(',')}"` : ''} class="card${component.metric ? ' metric' : ''}">
 			<header><h2 id="heading-${escape(id)}"${headingIcon ? ' class="with-icon"' : ''}>${headingIcon ?? ''}${escape(component.title)}</h2>
-				${headerAction ? context.button(headerAction.label, headerAction.action, { leading: headerAction.icon }) : ''}
+				${headerAction ? context.button(headerAction.label, headerAction.action, { leading: headerAction.icon, iconOnly: true }) : ''}
 				${moveHandle(component.title)}
 			</header>
 			<div class="card-content">${body}</div>
@@ -64,8 +64,10 @@ export function renderDashboard(
 	const button: ComponentContext['button'] = (label, action, options) => {
 		const id = `${nonce}-${actions.size}`;
 		actions.set(id, action);
-		if (action === 'add-link') {
-			return `<button type="button" class="card-action" data-action="${id}" aria-label="${escape(label)}" title="${escape(label)}">${options?.leading ?? ''}</button>`;
+		if (options?.iconOnly) {
+			const checked = options.checked === undefined ? '' : ` role="checkbox" aria-checked="${options.checked}"`;
+			const popup = options.opensDialog ? ' aria-haspopup="dialog"' : '';
+			return `<button type="button" class="card-action" data-action="${id}" aria-label="${escape(label)}" title="${escape(label)}"${checked}${popup}>${options.leading ?? ''}</button>`;
 		}
 		const title = options?.title ? ` title="${escape(options.title)}"` : '';
 		const quickLink = options?.leading || options?.trailing ? ' quick-link' : '';
@@ -109,6 +111,19 @@ export function renderDashboard(
 		</header>
 		${notice}${content}
 	</main>
+	${project ? `<dialog id="task-notes" aria-labelledby="task-notes-heading" aria-describedby="task-notes-title">
+		<form method="dialog">
+			<h2 id="task-notes-heading">${escape(vscode.l10n.t("Task Notes"))}</h2>
+			<p id="task-notes-title" class="muted"></p>
+			<label class="sr-only" for="task-notes-text">${escape(vscode.l10n.t("Notes"))}</label>
+			<textarea id="task-notes-text" rows="8"></textarea>
+			<p id="task-notes-error" role="alert" hidden></p>
+			<div class="task-notes-actions">
+				<button type="button" id="cancel-task-notes">${escape(vscode.l10n.t("Cancel"))}</button>
+				<button type="submit">${escape(vscode.l10n.t("Save Notes"))}</button>
+			</div>
+		</form>
+	</dialog>` : ''}
 	<script nonce="${nonce}" src="${escape(extensionResource('out/dashboardClient.js'))}"></script>
 </body>
 </html>`,

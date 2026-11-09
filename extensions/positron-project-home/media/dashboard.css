@@ -52,7 +52,7 @@ button {
 	cursor: pointer;
 }
 
-button:focus-visible, a:focus-visible, input:focus-visible, .drag-handle:focus-visible, .resize-handle:focus-visible, .card-content:focus-visible {
+button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible, summary:focus-visible, .drag-handle:focus-visible, .resize-handle:focus-visible, .card-content:focus-visible {
 	outline: 1px solid var(--vscode-focusBorder);
 	outline-offset: 2px;
 }
@@ -195,6 +195,104 @@ ul {
 
 .card li + li {
 	border-top: 1px solid var(--line);
+}
+
+.card .task-list li {
+	align-items: center;
+}
+
+.task-milestone .file {
+	width: fit-content;
+	max-width: 100%;
+	padding: 0;
+	color: var(--muted);
+	font-size: var(--vscode-fontSize-label1, 12px);
+}
+
+.task-milestone .file:hover {
+	color: var(--accent);
+}
+
+#completed-tasks summary {
+	padding: 8px 4px;
+	color: var(--muted);
+	cursor: pointer;
+}
+
+#completed-tasks summary:hover {
+	color: var(--vscode-foreground);
+}
+
+#task-notes {
+	box-sizing: border-box;
+	width: min(100% - 32px, 560px);
+	padding: var(--space);
+	color: inherit;
+	background: var(--surface);
+	border: var(--vscode-strokeThickness, 1px) solid var(--line);
+	border-radius: var(--radius);
+	box-shadow: var(--vscode-shadow-lg);
+	overflow-wrap: anywhere;
+}
+
+#task-notes::backdrop {
+	background: var(--vscode-editorWidget-background);
+	opacity: .65;
+}
+
+#task-notes form {
+	display: grid;
+	gap: 8px;
+}
+
+#task-notes textarea {
+	box-sizing: border-box;
+	width: 100%;
+	max-height: 50vh;
+	resize: vertical;
+	padding: 8px;
+	font: inherit;
+	color: var(--vscode-input-foreground);
+	background: var(--vscode-input-background);
+	border: var(--vscode-strokeThickness, 1px) solid var(--vscode-input-border, var(--line));
+	border-radius: var(--vscode-cornerRadius-small, 4px);
+}
+
+#task-notes-error {
+	color: var(--vscode-errorForeground);
+}
+
+.task-notes-actions {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+	gap: 8px;
+}
+
+.task-notes-actions button {
+	padding: 4px 12px;
+	color: var(--vscode-button-secondaryForeground);
+	background: var(--vscode-button-secondaryBackground);
+	border: var(--vscode-strokeThickness, 1px) solid var(--vscode-button-border, transparent);
+	border-radius: var(--vscode-cornerRadius-small, 4px);
+}
+
+.task-notes-actions button:hover {
+	background: var(--vscode-button-secondaryHoverBackground);
+}
+
+.task-notes-actions button[type="submit"] {
+	color: var(--vscode-button-foreground);
+	background: var(--vscode-button-background);
+}
+
+.task-notes-actions button[type="submit"]:hover {
+	background: var(--vscode-button-hoverBackground);
+}
+
+.task-notes-actions button:disabled {
+	cursor: default;
+	opacity: .65;
 }
 
 .grow {

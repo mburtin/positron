@@ -82,24 +82,39 @@
 	function limitVisibleRows(grid: HTMLElement): void {
 		for (const card of grid.querySelectorAll<HTMLElement>('.card-content')) {
 			const rows = Array.from(card.querySelectorAll('ul:not(.tags) > li'));
-			const lastVisible = rows[4];
 			if (rows.length <= 5) {
 				continue;
 			}
-
-			card.classList.add('scrollable');
-			card.tabIndex = 0;
-			card.setAttribute('role', 'region');
-			card.setAttribute('aria-labelledby', `heading-${card.parentElement!.id}`);
+			let lastVisible: Element | undefined;
 			const update = () => {
-				const height = lastVisible.getBoundingClientRect().bottom - card.getBoundingClientRect().top + card.scrollTop;
-				card.style.maxHeight = `${height}px`;
+				if (lastVisible) {
+					const height = lastVisible.getBoundingClientRect().bottom - card.getBoundingClientRect().top + card.scrollTop;
+					card.style.maxHeight = `${height}px`;
+				}
 			};
 			const observer = new ResizeObserver(update);
-			for (const row of rows.slice(0, 5)) {
-				observer.observe(row);
-			}
-			update();
+			const observeVisibleRows = () => {
+				observer.disconnect();
+				const visible = rows.filter(row => !row.closest('details:not([open])'));
+				lastVisible = visible.length > 5 ? visible[4] : undefined;
+				card.classList.toggle('scrollable', !!lastVisible);
+				if (lastVisible) {
+					card.tabIndex = 0;
+					card.setAttribute('role', 'region');
+					card.setAttribute('aria-labelledby', `heading-${card.parentElement!.id}`);
+					for (const row of visible.slice(0, 5)) {
+						observer.observe(row);
+					}
+					update();
+				} else {
+					card.removeAttribute('tabindex');
+					card.removeAttribute('role');
+					card.removeAttribute('aria-labelledby');
+					card.style.removeProperty('max-height');
+				}
+			};
+			card.addEventListener('toggle', observeVisibleRows, true);
+			observeVisibleRows();
 		}
 	}
 
@@ -299,20 +314,20 @@
 		return renderGrid;
 	}
 
-	type ViewState = { folder: string | undefined; editing?: boolean };
+	type ViewState = { folder: string | undefined; editing?: boolean; showCompleted?: boolean; notesDraft?: string };
 	const { acquireVsCodeApi } = globalThis as typeof globalThis & {
 		acquireVsCodeApi(): {
 			getState(): ViewState | undefined;
 			setState(state: ViewState): void;
-			postMessage(message: string | { id: string; columns: number; rows: number; anchor?: number[] }[]): void;
+			postMessage(message: string | { type: 'save-task-notes'; notes: string } | { id: string; columns: number; rows: number; anchor?: number[] }[]): void;
 		};
 	};
 	const api = acquireVsCodeApi();
 	const folder = document.body.dataset.project;
 	const settings = document.getElementById('layout-settings');
 	const grid = document.querySelector<HTMLElement>('.dashboard');
-	const previous = api.getState();
-	api.setState({ folder, editing: previous?.editing });
+	const state = { ...api.getState(), folder };
+	api.setState(state);
 
 	document.addEventListener('click', event => {
 		const action = event.target instanceof Element
@@ -327,12 +342,75 @@
 		return;
 	}
 
+	const completed = document.querySelector<HTMLDetailsElement>('#completed-tasks');
+	if (completed) {
+		completed.open = state.showCompleted ?? false;
+		completed.addEventListener('toggle', () => {
+			state.showCompleted = completed.open;
+			api.setState(state);
+		});
+	}
+
+	const notesDialog = document.querySelector<HTMLDialogElement>('#task-notes')!;
+	const notesText = notesDialog.querySelector<HTMLTextAreaElement>('textarea')!;
+	const notesError = notesDialog.querySelector<HTMLElement>('#task-notes-error')!;
+	const notesTitle = notesDialog.querySelector<HTMLElement>('#task-notes-title')!;
+	const cancelNotes = notesDialog.querySelector<HTMLButtonElement>('#cancel-task-notes')!;
+	const saveNotes = notesDialog.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+	const setSavingNotes = (saving: boolean) => {
+		saveNotes.disabled = cancelNotes.disabled = saving;
+		notesText.readOnly = saving;
+		notesError.hidden = true;
+	};
+	cancelNotes.addEventListener('click', () => notesDialog.close());
+	notesDialog.addEventListener('close', () => {
+		delete state.notesDraft;
+		api.setState(state);
+		api.postMessage('cancel-task-notes');
+	});
+	notesDialog.addEventListener('cancel', event => {
+		if (saveNotes.disabled) {
+			event.preventDefault();
+		}
+	});
+	notesDialog.addEventListener('submit', event => {
+		event.preventDefault();
+		setSavingNotes(true);
+		api.postMessage({ type: 'save-task-notes', notes: notesText.value });
+	});
+	notesText.addEventListener('input', () => {
+		state.notesDraft = notesText.value;
+		api.setState(state);
+	});
+	window.addEventListener('message', ({ data }) => {
+		if (data?.type === 'open-task-notes' && !notesDialog.open) {
+			notesTitle.textContent = data.title;
+			notesText.value = (data.restore ? state.notesDraft : undefined) ?? data.notes;
+			state.notesDraft = notesText.value;
+			api.setState(state);
+			setSavingNotes(!!data.saving);
+			notesDialog.showModal();
+			notesText.focus();
+		} else if (data?.type === 'task-notes-save-failed' && notesDialog.open) {
+			setSavingNotes(false);
+			notesError.textContent = data.message;
+			notesError.hidden = false;
+		} else if (data?.type === 'clear-task-notes-draft') {
+			delete state.notesDraft;
+			api.setState(state);
+		}
+	});
+	if (state.notesDraft !== undefined) {
+		api.postMessage('restore-task-notes');
+	}
+
 	const setEditing = (editing: boolean) => {
 		document.body.classList.toggle('layout-editing', editing);
 		settings.setAttribute('aria-pressed', String(editing));
-		api.setState({ folder, editing });
+		state.editing = editing;
+		api.setState(state);
 	};
-	setEditing(previous?.editing ?? false);
+	setEditing(state.editing ?? false);
 	settings.addEventListener('click', () => setEditing(!document.body.classList.contains('layout-editing')));
 	const save = () => {
 		api.postMessage(Array.from(grid.querySelectorAll<HTMLElement>(':scope > .card'), card => ({

@@ -4,11 +4,11 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
-import { ProjectAction } from './components/component';
+import { ProjectAction, TaskAction } from './components/component';
 import { createComponents } from './components/registry';
 import { renderDashboard } from './dashboard';
 import { loadLayout, resolveLayout, saveLayout } from './layout';
-import { appendProjectLink, loadProject, Project, resolveLinkTarget } from './project';
+import { appendProjectLink, editProjectTasks, loadProject, Project, ProjectDetailsError, resolveLinkTarget, TaskEdit } from './project';
 import { configPath, legacyConfigPath } from './settings';
 
 const viewType = 'positron.projectHome';
@@ -33,10 +33,47 @@ async function promptForLink(folder: vscode.Uri) {
 	return target === undefined ? undefined : { label: label.trim(), target: target.trim() };
 }
 
+/** Collects any input needed for a task action before opening the project details for writing. */
+async function promptForTaskEdit(action: Exclude<TaskAction, { type: 'edit-task-notes' }>, { config }: Project): Promise<TaskEdit | undefined> {
+	if (action.type === 'set-task-done') {
+		return action;
+	}
+	if (action.type === 'add-milestone' || action.type === 'add-task') {
+		const title = (await vscode.window.showInputBox({
+			title: action.type === 'add-milestone' ? vscode.l10n.t("Add Milestone") : vscode.l10n.t("Add Task"),
+			prompt: vscode.l10n.t("Enter a title"),
+			validateInput: value => value.trim() ? undefined : vscode.l10n.t("Enter a title."),
+		}))?.trim();
+		if (!title) {
+			return undefined;
+		}
+		if (action.type === 'add-milestone' || !config.milestones.length) {
+			return { type: action.type, title };
+		}
+		const destination = await pickMilestone(config.milestones, title);
+		return destination && { type: 'add-task', title, milestone: destination.index };
+	}
+	const destination = await pickMilestone(config.milestones, action.title, action);
+	return destination && { ...action, destination: destination.index };
+}
+
+/** Selects a destination for a new or existing task. */
+function pickMilestone(milestones: Project['config']['milestones'], title: string, move?: { milestone?: number }) {
+	const items = [
+		{ label: vscode.l10n.t("No Milestone"), description: undefined, index: undefined },
+		...milestones.map(({ title, date, index }) => ({ label: title, description: date, index })),
+	].filter(item => !move || item.index !== move.milestone);
+	return vscode.window.showQuickPick(items, {
+		title: title,
+		placeHolder: vscode.l10n.t("Choose a milestone for this task"),
+	});
+}
+
 export function activate(context: vscode.ExtensionContext): void {
 	const panels = new Map<string, vscode.WebviewPanel>();
 	const components = createComponents();
 	const pendingSaves = new Map<string, Promise<void>>();
+	const editingDetails = new Set<string>();
 
 	const options = (folder: vscode.WorkspaceFolder): vscode.WebviewOptions => ({
 		enableScripts: true,
@@ -55,16 +92,24 @@ export function activate(context: vscode.ExtensionContext): void {
 
 		let loading: vscode.CancellationTokenSource | undefined;
 		let actions = new Map<string, ProjectAction>();
-		let addingLink = false;
+		let renderedProject: Project | undefined;
+		let notesEditor: { action: Extract<TaskAction, { type: 'edit-task-notes' }>; revision: string; saving: boolean } | undefined;
 		const setPage = (project?: Project, error?: boolean) => {
+			if (notesEditor) {
+				return;
+			}
 			const page = renderDashboard(panel.webview, context.extensionUri, folder, components, layout, project, error);
 			actions = page.actions;
+			renderedProject = project;
 			panel.webview.html = page.html;
 			if (project) {
 				panel.title = vscode.l10n.t("Project: {0}", project.config.title ?? folder.name);
 			}
 		};
 		const refresh = async () => {
+			if (notesEditor) {
+				return;
+			}
 			loading?.cancel();
 			loading?.dispose();
 			const request = new vscode.CancellationTokenSource();
@@ -105,6 +150,40 @@ export function activate(context: vscode.ExtensionContext): void {
 				}
 			}),
 			panel.webview.onDidReceiveMessage(async (message: unknown) => {
+				if (message === 'restore-task-notes') {
+					const editor = notesEditor;
+					void panel.webview.postMessage(editor
+						? { type: 'open-task-notes', title: editor.action.title, notes: editor.action.notes, saving: editor.saving, restore: true }
+						: { type: 'clear-task-notes-draft' });
+					return;
+				}
+				if (notesEditor) {
+					const editor = notesEditor;
+					if (editor.saving) {
+						return;
+					}
+					if (message === 'cancel-task-notes') {
+						notesEditor = undefined;
+						void refresh();
+					} else if (message && typeof message === 'object' && 'type' in message && message.type === 'save-task-notes'
+						&& 'notes' in message && typeof message.notes === 'string') {
+						editor.saving = true;
+						try {
+							const { index, milestone } = editor.action;
+							await editProjectTasks(folder.uri, editor.revision, { type: 'set-task-notes', index, milestone, notes: message.notes });
+							notesEditor = undefined;
+							if (panels.get(key) === panel) {
+								void refresh();
+							}
+						} catch (error) {
+							editor.saving = false;
+							const reason = error instanceof ProjectDetailsError ? error.message
+								: vscode.l10n.t("Check that {0} is writable and try again.", configPath);
+							void panel.webview.postMessage({ type: 'task-notes-save-failed', message: reason });
+						}
+					}
+					return;
+				}
 				if (Array.isArray(message)) {
 					const nextLayout = resolveLayout(components, message);
 					layout = nextLayout;
@@ -123,23 +202,43 @@ export function activate(context: vscode.ExtensionContext): void {
 				if (!action) {
 					return;
 				}
-				if (action === 'add-link') {
-					if (addingLink) {
+				if (!(action instanceof vscode.Uri) && (action === 'add-link' || !('external' in action))) {
+					const project = renderedProject;
+					if (!project || editingDetails.has(key)) {
 						return;
 					}
-					addingLink = true;
+					if (action !== 'add-link' && action.type === 'edit-task-notes') {
+						const editor = { action, revision: project.taskRevision, saving: false };
+						notesEditor = editor;
+						if (!await panel.webview.postMessage({ type: 'open-task-notes', title: action.title, notes: action.notes }) && notesEditor === editor) {
+							notesEditor = undefined;
+						}
+						return;
+					}
+					editingDetails.add(key);
 					try {
-						const link = await promptForLink(folder.uri);
-						if (link && panels.get(key) === panel) {
-							await appendProjectLink(folder.uri, link);
-							if (panels.get(key) === panel) {
-								void refresh();
+						if (action === 'add-link') {
+							const link = await promptForLink(folder.uri);
+							if (!link || panels.get(key) !== panel) {
+								return;
 							}
+							await appendProjectLink(folder.uri, link);
+						} else {
+							const edit = await promptForTaskEdit(action, project);
+							if (!edit || panels.get(key) !== panel) {
+								return;
+							}
+							await editProjectTasks(folder.uri, project.taskRevision, edit);
 						}
 					} catch {
-						void vscode.window.showWarningMessage(vscode.l10n.t("The quick link could not be saved. Check the project details in {0}.", configPath));
+						void vscode.window.showWarningMessage(action === 'add-link'
+							? vscode.l10n.t("The quick link could not be saved. Check the project details in {0}.", configPath)
+							: vscode.l10n.t("The task update could not be saved. Check the project details in {0} and try again.", configPath));
 					} finally {
-						addingLink = false;
+						editingDetails.delete(key);
+					}
+					if (panels.get(key) === panel) {
+						void refresh();
 					}
 					return;
 				}

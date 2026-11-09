@@ -5,6 +5,11 @@
 
 const icons = {
 	add: 'M8 3v10M3 8h10',
+	tasks: 'M2 4l1.5 1.5L6 3M2 10l1.5 1.5L6 9M8 4.5h6M8 10.5h6',
+	progress: 'M2 13h12M4 10V7m4 3V5m4 5V2',
+	milestone: 'M3 14V2m0 1h10l-2 3 2 3H3',
+	note: 'M3 2.5h10v11H3z',
+	'written-note': 'M3 2.5h10v11H3zM5.5 6h5m-5 3h5',
 	link: 'M6.5 9.5l3-3M6 5l2-2a3.5 3.5 0 0 1 5 5l-2 2M5 6l-2 2a3.5 3.5 0 0 0 5 5l2-2',
 	external: 'M9 2.5h4.5V7M13.5 2.5l-6 6M6.5 3.5h-4v10h10v-4',
 	folder: 'M1.5 13V3h4.25l2 2h6.75v8z',

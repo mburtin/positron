@@ -4,13 +4,22 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
-import { ChecklistItem, Project } from '../project';
+import { ChecklistItem, Project, TaskEdit } from '../project';
 
-export type ProjectAction = vscode.Uri | { external: vscode.Uri } | 'add-link';
+export type TaskAction = { type: 'add-task' } | { type: 'add-milestone' }
+	| Extract<TaskEdit, { type: 'set-task-done' }>
+	| { type: 'edit-task-notes'; index: number; milestone?: number; title: string; notes: string }
+	| { type: 'move-task'; index: number; milestone?: number; title: string };
+
+export type ProjectAction = vscode.Uri | { external: vscode.Uri } | 'add-link' | TaskAction;
 
 export interface ButtonOptions {
 	readonly leading?: string;
 	readonly trailing?: string;
+	readonly iconOnly?: boolean;
+	readonly opensDialog?: boolean;
+	/** Checked state for an action rendered as a checkbox. */
+	readonly checked?: boolean;
 	/** Tooltip shown on hover, for labels that do not spell out the full target. */
 	readonly title?: string;
 }
@@ -54,7 +63,7 @@ export function empty(message: string): string {
 	return `<p class="muted">${escape(message)}</p>`;
 }
 
-export function progress(items: ChecklistItem[], label: string): string {
+export function progress(items: readonly ChecklistItem[], label: string): string {
 	if (!items.length) {
 		return '';
 	}
