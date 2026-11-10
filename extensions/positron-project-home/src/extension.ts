@@ -8,8 +8,9 @@ import { ProjectAction, TaskAction } from './components/component';
 import { createComponents } from './components/registry';
 import { renderDashboard } from './dashboard';
 import { loadLayout, resolveLayout, saveLayout } from './layout';
-import { appendProjectShortcut, editProjectTasks, FileShortcutSection, loadProject, Project, ProjectDetailsError, projectResource, removeProjectFileShortcut, resolveLinkTarget, TaskEdit } from './project';
-import { configPath, legacyConfigPath } from './settings';
+import { createManuscript, manuscriptWatchPaths } from './manuscript';
+import { appendProjectShortcut, editProjectTasks, FileShortcutSection, loadProject, Project, ProjectDetailsError, removeProjectFileShortcut, resolveLinkTarget, setManuscriptChapterDone, TaskEdit } from './project';
+import { configPath, legacyConfigPath, projectResource } from './settings';
 
 const viewType = 'positron.projectHome';
 const clientRoot = vscode.Uri.file(__dirname);
@@ -160,12 +161,17 @@ export function activate(context: vscode.ExtensionContext): void {
 			}
 		};
 
-		const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(folder, `{${configPath},${legacyConfigPath}}`));
+		const watchers = [[configPath, legacyConfigPath], manuscriptWatchPaths].flatMap(paths => {
+			const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(folder, `{${paths.join(',')}}`));
+			return [
+				watcher,
+				watcher.onDidCreate(() => void refresh()),
+				watcher.onDidChange(() => void refresh()),
+				watcher.onDidDelete(() => void refresh()),
+			];
+		});
 		const listeners = vscode.Disposable.from(
-			watcher,
-			watcher.onDidCreate(() => void refresh()),
-			watcher.onDidChange(() => void refresh()),
-			watcher.onDidDelete(() => void refresh()),
+			...watchers,
 			panel.onDidChangeViewState(event => {
 				if (event.webviewPanel.visible) {
 					void refresh();
@@ -251,6 +257,10 @@ export function activate(context: vscode.ExtensionContext): void {
 							} else {
 								await removeProjectFileShortcut(folder.uri, action.section, action.shortcut.target);
 							}
+						} else if (action.type === 'create-manuscript') {
+							await createManuscript(folder.uri, project.config.title ?? folder.name);
+						} else if (action.type === 'set-manuscript-chapter-done') {
+							await setManuscriptChapterDone(folder.uri, action.path, action.done);
 						} else {
 							const edit = await promptForTaskEdit(action, project);
 							if (!edit || panels.get(key) !== panel) {
@@ -259,12 +269,22 @@ export function activate(context: vscode.ExtensionContext): void {
 							await editProjectTasks(folder.uri, project.taskRevision, edit);
 						}
 					} catch (error) {
-						const shortcutAction = action === 'add-link' || action.type === 'add-file' || action.type === 'set-file-pinned';
-						const message = shortcutAction && error instanceof ProjectDetailsError ? error.message
-							: action === 'add-link' ? vscode.l10n.t("The quick link could not be saved. Check the project details in {0}.", configPath)
-								: action.type === 'add-file' || action.type === 'set-file-pinned'
-									? vscode.l10n.t("The file pin could not be updated. Check the project details in {0}.", configPath)
-									: vscode.l10n.t("The task update could not be saved. Check the project details in {0} and try again.", configPath);
+						const projectDetailsAction = action === 'add-link' || action.type === 'add-file'
+							|| action.type === 'set-file-pinned' || action.type === 'set-manuscript-chapter-done';
+						let message: string;
+						if (projectDetailsAction && error instanceof ProjectDetailsError) {
+							message = error.message;
+						} else if (action === 'add-link') {
+							message = vscode.l10n.t("The quick link could not be saved. Check the project details in {0}.", configPath);
+						} else if (action.type === 'create-manuscript') {
+							message = vscode.l10n.t("The manuscript could not be created. Check that the project folder is writable and that no manuscript folder already exists.");
+						} else if (action.type === 'set-manuscript-chapter-done') {
+							message = vscode.l10n.t("Manuscript progress could not be saved. Check the project details in {0}.", configPath);
+						} else if (action.type === 'add-file' || action.type === 'set-file-pinned') {
+							message = vscode.l10n.t("The file pin could not be updated. Check the project details in {0}.", configPath);
+						} else {
+							message = vscode.l10n.t("The task update could not be saved. Check the project details in {0} and try again.", configPath);
+						}
 						void vscode.window.showWarningMessage(message);
 					} finally {
 						editingDetails.delete(key);

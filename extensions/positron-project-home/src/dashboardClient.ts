@@ -274,7 +274,7 @@
 		return renderGrid;
 	}
 
-	type ViewState = { folder: string | undefined; editing?: boolean; showCompleted?: boolean; notesDraft?: string };
+	type ViewState = { folder: string | undefined; editing?: boolean; showCompleted?: boolean; notesDraft?: string; pageScroll?: number; manuscriptScroll?: number };
 	const { acquireVsCodeApi } = globalThis as typeof globalThis & {
 		acquireVsCodeApi(): {
 			getState(): ViewState | undefined;
@@ -381,6 +381,19 @@
 		})));
 	};
 	const relayout = enableResizing(grid, save);
+	window.scrollTo(0, state.pageScroll ?? 0);
+	window.addEventListener('scroll', () => {
+		state.pageScroll = window.scrollY;
+		api.setState(state);
+	});
+	const manuscript = grid.querySelector<HTMLElement>('#manuscript .card-content');
+	if (manuscript) {
+		manuscript.scrollTop = state.manuscriptScroll ?? 0;
+		manuscript.addEventListener('scroll', () => {
+			state.manuscriptScroll = manuscript.scrollTop;
+			api.setState(state);
+		});
+	}
 	const reorder = (source: HTMLElement, target: Element, before: boolean) => {
 		delete source.dataset.anchor;
 		if (before) {

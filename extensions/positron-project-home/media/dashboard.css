@@ -162,8 +162,42 @@ ul {
 }
 
 .card .task-list li,
-.card .file-list li {
+.card .file-list li,
+.card .manuscript-chapters li {
 	align-items: center;
+}
+
+.card-content:has(> .manuscript-create:only-child) {
+	display: grid;
+	place-items: center;
+	scrollbar-gutter: auto;
+}
+
+.manuscript-create .file {
+	width: fit-content;
+	padding: var(--vscode-spacing-size60, 6px) var(--vscode-spacing-size120, 12px);
+	color: var(--vscode-button-foreground);
+	background: var(--vscode-button-background);
+}
+
+.manuscript-create .file:hover {
+	background: var(--vscode-button-hoverBackground);
+}
+
+.manuscript-summary {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--vscode-spacing-size80, 8px);
+}
+
+.manuscript-summary .pill {
+	flex-shrink: 0;
+}
+
+.manuscript-summary progress {
+	flex: 1;
+	min-width: 0;
 }
 
 @media (hover: hover) {

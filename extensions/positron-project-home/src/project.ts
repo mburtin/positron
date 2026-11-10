@@ -4,10 +4,11 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
-import { configPath, createFileIfMissing, encodeSettings, legacyConfigPath, readOptionalFile } from './settings';
+import { loadManuscript, manuscriptDirectory } from './manuscript';
+import { asRecord, asText, configPath, createFileIfMissing, encodeSettings, legacyConfigPath, projectResource, readOptionalFile } from './settings';
 
 const patterns = {
-	manuscript: '{manuscript.*,manuscript/**}',
+	manuscript: `{${manuscriptDirectory}.*,${manuscriptDirectory}/**}`,
 	data: 'data/**',
 };
 
@@ -34,7 +35,7 @@ export interface ProjectMilestone {
 interface ProjectConfig {
 	title?: string;
 	tasks: ProjectTask[];
-	manuscript?: { file?: string; sections: ChecklistItem[] };
+	manuscript?: { file?: string; sections: ChecklistItem[]; completedChapters: string[] };
 	milestones: ProjectMilestone[];
 	links: ProjectShortcut[];
 	documents: ProjectShortcut[];
@@ -52,12 +53,8 @@ type ShortcutSection = 'links' | FileShortcutSection;
 
 type ConfigState = 'missing' | 'invalid' | 'ready';
 
-function asRecord(value: unknown): Record<string, unknown> | undefined {
-	return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
-}
-
-function asText(value: unknown): string | undefined {
-	return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+function readChapterPaths(value: unknown): string[] {
+	return Array.isArray(value) ? value.filter((path): path is string => typeof path === 'string') : [];
 }
 
 function readItems<T>(value: unknown, read: (item: Record<string, unknown>, index: number) => T | undefined): T[] {
@@ -103,6 +100,7 @@ function parseConfig(raw: Record<string, unknown>): ProjectConfig {
 		manuscript: manuscript && {
 			file: asText(manuscript.file),
 			sections: readItems(manuscript.sections, readChecklistItem),
+			completedChapters: readChapterPaths(manuscript.completedChapters),
 		},
 		milestones: readItems(raw.milestones, (item, index) => {
 			const title = asText(item.title);
@@ -143,14 +141,6 @@ async function readConfig(folder: vscode.Uri): Promise<{ state: ConfigState; con
 	} catch {
 		return result('invalid');
 	}
-}
-
-export function projectResource(folder: vscode.Uri, path: string): vscode.Uri | undefined {
-	const segments = path.split('/');
-	if (segments.some(segment => !segment || segment === '.' || segment === '..' || /[\\:\u0000-\u001f]/.test(segment))) {
-		return undefined;
-	}
-	return vscode.Uri.joinPath(folder, ...segments);
 }
 
 /** Accepts HTTPS links without credentials. */
@@ -200,6 +190,23 @@ export type TaskEdit =
 
 /** Provides a localized explanation when project details cannot be updated safely. */
 export class ProjectDetailsError extends Error { }
+
+/** Persists the completion state of a chapter without editing its Quarto source. */
+export async function setManuscriptChapterDone(folder: vscode.Uri, path: string, done: boolean): Promise<void> {
+	await updateProjectDetails(folder, raw => {
+		const manuscript = raw.manuscript === undefined ? raw.manuscript = {} : asRecord(raw.manuscript);
+		if (!manuscript || (manuscript.completedChapters !== undefined && !Array.isArray(manuscript.completedChapters))) {
+			throw new Error('Invalid manuscript details');
+		}
+		const completed = new Set(readChapterPaths(manuscript.completedChapters));
+		if (done) {
+			completed.add(path);
+		} else {
+			completed.delete(path);
+		}
+		manuscript.completedChapters = [...completed];
+	});
+}
 
 /** Applies an edit only if the task lists still match the rendered dashboard. */
 export async function editProjectTasks(folder: vscode.Uri, revision: string, edit: TaskEdit): Promise<void> {
@@ -326,9 +333,10 @@ export async function loadProject(folder: vscode.WorkspaceFolder, token: vscode.
 		return files.filter(uri => vscode.workspace.getWorkspaceFolder(uri)?.uri.toString() === root)
 			.sort((a, b) => a.path.localeCompare(b.path));
 	};
-	const [metadata, manuscript, data] = await Promise.all([
+	const [metadata, manuscript, data, manuscriptBook] = await Promise.all([
 		readConfig(folder.uri),
 		find(patterns.manuscript), find(patterns.data),
+		loadManuscript(folder.uri),
 	]);
 	const { config } = metadata;
 	const manuscriptFile = config.manuscript?.file && projectResource(folder.uri, config.manuscript.file);
@@ -337,8 +345,10 @@ export async function loadProject(folder: vscode.WorkspaceFolder, token: vscode.
 		return external ? [{ label, external }] : [];
 	});
 	// Older projects stored local shortcuts alongside external links.
-	const [manuscriptStat, documents, dataPins] = await Promise.all([
+	const manuscriptFolder = vscode.Uri.joinPath(folder.uri, manuscriptDirectory);
+	const [manuscriptStat, manuscriptFolderStat, documents, dataPins] = await Promise.all([
 		manuscriptFile ? stat(manuscriptFile) : undefined,
+		manuscriptBook ? undefined : stat(manuscriptFolder),
 		loadFileShortcuts(folder.uri, [...config.documents, ...config.links]),
 		loadFileShortcuts(folder.uri, config.data),
 	]);
@@ -350,6 +360,8 @@ export async function loadProject(folder: vscode.WorkspaceFolder, token: vscode.
 	});
 	return {
 		...metadata,
+		manuscriptBook,
+		manuscriptFolder: manuscriptFolderStat ? manuscriptFolder : undefined,
 		links,
 		documents,
 		data: [...dataPins.map(file => ({ ...file, pinned: true })), ...detectedData],

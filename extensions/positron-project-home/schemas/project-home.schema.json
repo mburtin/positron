@@ -15,7 +15,13 @@
 			"properties": {
 				"file": { "type": "string", "description": "Project-relative path to the manuscript." },
 				"status": { "type": "string" },
-				"sections": { "type": "array", "items": { "$ref": "#/definitions/checklistItem" } }
+				"sections": { "type": "array", "items": { "$ref": "#/definitions/checklistItem" } },
+				"completedChapters": {
+					"type": "array",
+					"description": "Paths relative to the Quarto book for chapters marked complete.",
+					"uniqueItems": true,
+					"items": { "type": "string" }
+				}
 			}
 		},
 		"milestones": {

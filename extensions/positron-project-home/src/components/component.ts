@@ -14,7 +14,10 @@ export type TaskAction = { type: 'add-task' } | { type: 'add-milestone' }
 type FilePinAction = { type: 'add-file'; section: FileShortcutSection }
 	| { type: 'set-file-pinned'; section: FileShortcutSection; shortcut: ProjectShortcut; pinned: boolean };
 
-export type ProjectAction = vscode.Uri | { external: vscode.Uri } | 'add-link' | FilePinAction | TaskAction;
+type ManuscriptAction = { type: 'create-manuscript' }
+	| { type: 'set-manuscript-chapter-done'; path: string; done: boolean };
+
+export type ProjectAction = vscode.Uri | { external: vscode.Uri } | 'add-link' | FilePinAction | TaskAction | ManuscriptAction;
 
 export interface ButtonOptions {
 	readonly leading?: string;

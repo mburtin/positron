@@ -54,11 +54,41 @@ export function manuscript(): DashboardComponent {
 		title: vscode.l10n.t("Manuscript"),
 		columns: 1,
 		nav: true,
-		render({ project: { config, files }, fileList }) {
+		render({ project: { config, files, manuscriptBook, manuscriptFolder }, button, fileList }) {
+			const headingIcon = icon('file');
+			if (manuscriptBook) {
+				const completed = new Set(config.manuscript?.completedChapters);
+				const chapters = manuscriptBook.chapters.map(chapter => ({ ...chapter, done: completed.has(chapter.path) }));
+				const done = chapters.filter(chapter => chapter.done).length;
+				const percent = chapters.length ? Math.floor(100 * done / chapters.length) : 0;
+				const title = manuscriptBook.title ?? this.title;
+				return {
+					headingIcon,
+					headerAction: {
+						label: vscode.l10n.t("Open Manuscript"),
+						action: chapters[0]?.uri ?? manuscriptBook.directory,
+						icon: icon('external'),
+					},
+					body: `<div class="manuscript-summary"><strong>${escape(title)}</strong>
+						<span class="pill">${escape(percent === 100 ? vscode.l10n.t("Complete") : vscode.l10n.t("Draft"))}</span></div>
+						${chapters.length ? `<div class="manuscript-summary">
+							${progress(chapters, vscode.l10n.t("Manuscript Progress"))}
+							<span aria-hidden="true">${escape(vscode.l10n.t("{0}%", percent))}</span></div>
+							${list(chapters.map(({ title, path, uri, done }) => {
+								const toggle = button(vscode.l10n.t("Completion of {0}", title), { type: 'set-manuscript-chapter-done', path, done: !done }, {
+									iconOnly: true, checked: done, leading: status(done),
+								});
+								return `${toggle}<div class="grow">${button(title, uri, { title: path })}</div>`;
+							}), 'manuscript-chapters')}` : empty(vscode.l10n.t("Add chapters to the Quarto book to see them here."))}`,
+				};
+			}
 			const sections = config.manuscript?.sections ?? [];
+			const entry = files.manuscript.length ? fileList(files.manuscript)
+				: manuscriptFolder ? button(vscode.l10n.t("Open Manuscript Folder"), manuscriptFolder)
+					: `<div class="manuscript-create">${button(vscode.l10n.t("Create Manuscript"), { type: 'create-manuscript' })}</div>`;
 			return {
-				body: `${files.manuscript.length ? fileList(files.manuscript) : empty(vscode.l10n.t("Add a manuscript file in the project details."))}
-					${sections.length ? progress(sections, this.title) + checklist(sections) : ''}`,
+				headingIcon,
+				body: `${entry}${sections.length ? progress(sections, this.title) + checklist(sections) : ''}`,
 			};
 		},
 	};
