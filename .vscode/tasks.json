@@ -865,14 +865,19 @@
 		},
 		// --- Personal modifications - Start ---
 		{
-			// Full minified build of the macOS arm64 app, then ad-hoc signing so
-			// Apple Silicon accepts the modified Electron bundle.
+			// Use the Node version pinned by the checkout and refresh dependencies
+			// before the full minified build and ad-hoc signing.
+			// Run npm lifecycle scripts in the foreground so linked packages
+			// don't compile shared declarations concurrently.
 			// Output: ../VSCode-darwin-arm64/NLM Studio.app (sibling of the repo).
 			"label": "Perso: Build macOS arm64 App",
 			"type": "shell",
-			"command": "npm run gulp vscode-darwin-arm64-min && codesign --force --deep --sign - \"../VSCode-darwin-arm64/NLM Studio.app\" && echo \"Built: $(cd .. && pwd)/VSCode-darwin-arm64/NLM Studio.app\"",
+			"command": "fnm install \"$(cat .nvmrc)\" && npm_config_foreground_scripts=true fnm exec --using=.nvmrc -- npm run install-fast && fnm exec --using=.nvmrc -- npm run gulp vscode-darwin-arm64-min && codesign --force --deep --sign - \"../VSCode-darwin-arm64/NLM Studio.app\" && echo \"Built: $(cd .. && pwd)/VSCode-darwin-arm64/NLM Studio.app\"",
 			"options": {
-				"cwd": "${workspaceFolder}"
+				"cwd": "${workspaceFolder}",
+				"env": {
+					"CI_PYTHON_PATH": "/opt/homebrew/bin/python3.14"
+				}
 			},
 			"group": "build",
 			"presentation": {
