@@ -23,6 +23,23 @@ suite('Browser Navigation Focus', () => {
 
 	teardown(() => restore());
 
+	test('opening the integrated browser creates a pinned tab on each invocation', async () => {
+		const instantiationService = workbenchInstantiationService(undefined, store);
+		const openEditor = stub().resolves(undefined);
+		instantiationService.stub(IEditorService, 'openEditor', openEditor);
+		instantiationService.stub(IBrowserViewWorkbenchService, upcastPartial<IBrowserViewWorkbenchService>({
+			getPreferredGroup: async () => undefined,
+		}));
+
+		const openBrowser = CommandsRegistry.getCommand(BrowserViewCommandId.Open)!.handler;
+		await instantiationService.invokeFunction(openBrowser);
+		await instantiationService.invokeFunction(openBrowser);
+
+		const openedEditors = openEditor.args.map(([editor]) => editor);
+		assert.deepStrictEqual(openedEditors.map(editor => editor.options.pinned), [true, true]);
+		assert.notStrictEqual(openedEditors[0].resource.toString(), openedEditors[1].resource.toString());
+	});
+
 	test('new-tab commands open the URL picker only when no URL was supplied', async () => {
 		const instantiationService = workbenchInstantiationService(undefined, store);
 		instantiationService.stub(IPreferencesService, upcastPartial<IPreferencesService>({}));

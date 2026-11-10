@@ -123,10 +123,10 @@ export function quickLinks(): DashboardComponent {
 		title: vscode.l10n.t("Quick Links"),
 		columns: 1,
 		render({ project: { links }, button }) {
-			const items = links.map(({ label, external }) => {
-				const host = new URL(external.toString()).hostname;
+			const items = links.map(({ label, url }) => {
+				const host = new URL(url).hostname;
 				const iconName = /(^|\.)github\.com$/.test(host) ? 'github' : /(^|\.)zotero\.org$/.test(host) ? 'cap' : 'link';
-				return button(label, { external }, { leading: icon(iconName), trailing: icon('external') });
+				return button(label, { type: 'open-link', url }, { leading: icon(iconName) });
 			});
 			return {
 				headingIcon: icon('link'),

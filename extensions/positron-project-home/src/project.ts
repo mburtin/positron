@@ -144,13 +144,13 @@ async function readConfig(folder: vscode.Uri): Promise<{ state: ConfigState; con
 }
 
 /** Accepts HTTPS links without credentials. */
-export function resolveLinkTarget(target: string): vscode.Uri | undefined {
+export function resolveLinkTarget(target: string): string | undefined {
 	if (!/^https:\/\//i.test(target)) {
 		return undefined;
 	}
 	try {
 		const url = new URL(target);
-		return url.username || url.password ? undefined : vscode.Uri.parse(url.href);
+		return url.username || url.password ? undefined : url.href;
 	} catch {
 		return undefined;
 	}
@@ -341,8 +341,8 @@ export async function loadProject(folder: vscode.WorkspaceFolder, token: vscode.
 	const { config } = metadata;
 	const manuscriptFile = config.manuscript?.file && projectResource(folder.uri, config.manuscript.file);
 	const links = config.links.flatMap(({ label, target }) => {
-		const external = resolveLinkTarget(target);
-		return external ? [{ label, external }] : [];
+		const url = resolveLinkTarget(target);
+		return url ? [{ label, url }] : [];
 	});
 	// Older projects stored local shortcuts alongside external links.
 	const manuscriptFolder = vscode.Uri.joinPath(folder.uri, manuscriptDirectory);

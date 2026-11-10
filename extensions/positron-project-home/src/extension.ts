@@ -230,7 +230,7 @@ export function activate(context: vscode.ExtensionContext): void {
 				if (!action) {
 					return;
 				}
-				if (!(action instanceof vscode.Uri) && (typeof action === 'string' || !('external' in action))) {
+				if (!(action instanceof vscode.Uri) && (typeof action === 'string' || action.type !== 'open-link')) {
 					const project = renderedProject;
 					if (!project || editingDetails.has(key)) {
 						return;
@@ -299,7 +299,9 @@ export function activate(context: vscode.ExtensionContext): void {
 						const info = await vscode.workspace.fs.stat(action);
 						const command = info.type & vscode.FileType.Directory ? 'revealInExplorer' : 'vscode.open';
 						await vscode.commands.executeCommand(command, action);
-					} else if (!await vscode.env.openExternal(action.external)) {
+					} else if (vscode.env.uiKind === vscode.UIKind.Desktop) {
+						await vscode.commands.executeCommand('workbench.action.browser.open', action.url);
+					} else if (!await vscode.env.openExternal(vscode.Uri.parse(action.url))) {
 						throw new Error('The external link could not be opened');
 					}
 				} catch {
