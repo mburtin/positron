@@ -78,46 +78,6 @@
 		container.addEventListener('dragend', finishDrag);
 	}
 
-	/** Keeps the first five rows visible, even when their text wraps. */
-	function limitVisibleRows(grid: HTMLElement): void {
-		for (const card of grid.querySelectorAll<HTMLElement>('.card-content')) {
-			const rows = Array.from(card.querySelectorAll('ul > li'));
-			if (rows.length <= 5) {
-				continue;
-			}
-			let lastVisible: Element | undefined;
-			const update = () => {
-				if (lastVisible) {
-					const height = lastVisible.getBoundingClientRect().bottom - card.getBoundingClientRect().top + card.scrollTop;
-					card.style.maxHeight = `${height}px`;
-				}
-			};
-			const observer = new ResizeObserver(update);
-			const observeVisibleRows = () => {
-				observer.disconnect();
-				const visible = rows.filter(row => !row.closest('details:not([open])'));
-				lastVisible = visible.length > 5 ? visible[4] : undefined;
-				card.classList.toggle('scrollable', !!lastVisible);
-				if (lastVisible) {
-					card.tabIndex = 0;
-					card.setAttribute('role', 'region');
-					card.setAttribute('aria-labelledby', `heading-${card.parentElement!.id}`);
-					for (const row of visible.slice(0, 5)) {
-						observer.observe(row);
-					}
-					update();
-				} else {
-					card.removeAttribute('tabindex');
-					card.removeAttribute('role');
-					card.removeAttribute('aria-labelledby');
-					card.style.removeProperty('max-height');
-				}
-			};
-			card.addEventListener('toggle', observeVisibleRows, true);
-			observeVisibleRows();
-		}
-	}
-
 	/** Resizes cards in whole grid tracks and lets CSS Grid place the other cards. */
 	function enableResizing(grid: HTMLElement, save: () => void): () => void {
 		const cards = () => Array.from(grid.querySelectorAll<HTMLElement>(':scope > .card'));
@@ -459,6 +419,5 @@
 		}
 	});
 
-	limitVisibleRows(grid);
 	enableReordering(grid, reorder);
 })();

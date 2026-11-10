@@ -33,7 +33,7 @@ function renderComponents(
 	const cards = layout.map(({ id, columns, rows, anchor }) => {
 		const component = components.get(id)!;
 		const { body, headingIcon, headerAction } = component.render(context);
-		return `<section id="${escape(id)}" data-component="${escape(id)}" data-columns="${columns}" data-rows="${rows}"${anchor ? ` data-anchor="${anchor.join(',')}"` : ''} class="card${component.metric ? ' metric' : ''}">
+		return `<section id="${escape(id)}" aria-labelledby="heading-${escape(id)}" data-component="${escape(id)}" data-columns="${columns}" data-rows="${rows}"${anchor ? ` data-anchor="${anchor.join(',')}"` : ''} class="card${component.metric ? ' metric' : ''}">
 			<header><h2 id="heading-${escape(id)}"${headingIcon ? ' class="with-icon"' : ''}>${headingIcon ?? ''}${escape(component.title)}</h2>
 				${headerAction ? context.button(headerAction.label, headerAction.action, { leading: headerAction.icon, iconOnly: true }) : ''}
 				${moveHandle(component.title)}
