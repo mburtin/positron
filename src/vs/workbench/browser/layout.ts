@@ -37,6 +37,7 @@ import { Part } from './part.js';
 import { clamp } from '../../base/common/numbers.js';
 import { IPositronTopActionBarService } from '../services/positronTopActionBar/browser/positronTopActionBarService.js';
 import { SIDEBAR_PART_MINIMUM_WIDTH } from './parts/sidebar/sidebarPart.js';
+import { isBottomPanelEnabled } from '../common/positronBottomPanelLock.js';
 // --- End Positron ---
 import { IStatusbarService } from '../services/statusbar/browser/statusbar.js';
 import { IFileService } from '../../platform/files/common/files.js';
@@ -2263,8 +2264,10 @@ export abstract class Layout extends Disposable implements IWorkbenchLayoutServi
 		}
 
 		// --- Start Positron ---
-		// The bottom panel is permanently disabled: it can never be shown.
-		hidden = true;
+		// The bottom panel is disabled unless re-enabled with the "Toggle Bottom Panel Availability" command.
+		if (!isBottomPanelEnabled(this.storageService)) {
+			hidden = true;
+		}
 		// --- End Positron ---
 
 		if (!hidden && this.setAuxiliaryBarMaximized(false) && this.isVisible(Parts.PANEL_PART)) {
@@ -3545,8 +3548,10 @@ class LayoutStateModel extends Disposable {
 		this.applyOverrides(configuration);
 
 		// --- Start Positron ---
-		// The bottom panel is permanently disabled: ignore any restored visibility.
-		this.stateCache.set(LayoutStateKeys.PANEL_HIDDEN.name, true);
+		// The bottom panel is disabled unless re-enabled: ignore any restored visibility.
+		if (!isBottomPanelEnabled(this.storageService)) {
+			this.stateCache.set(LayoutStateKeys.PANEL_HIDDEN.name, true);
+		}
 		// --- End Positron ---
 
 		// Register for runtime key changes

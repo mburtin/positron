@@ -21,6 +21,10 @@ import { INotificationService } from '../../../../platform/notification/common/n
 import { ICommandActionTitle } from '../../../../platform/action/common/action.js';
 import { KeybindingWeight } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
 import { SwitchCompositeViewAction } from '../compositeBarActions.js';
+// --- Start Positron ---
+import { IStorageService } from '../../../../platform/storage/common/storage.js';
+import { isBottomPanelEnabled, setBottomPanelEnabled } from '../../../common/positronBottomPanelLock.js';
+// --- End Positron ---
 
 const maximizeIcon = registerIcon('panel-maximize', Codicon.screenFull, localize('maximizeIcon', 'Icon to maximize a panel.'));
 const closeIcon = registerIcon('panel-close', Codicon.close, localize('closeIcon', 'Icon to close a panel.'));
@@ -85,6 +89,38 @@ export class TogglePanelAction extends Action2 {
 }
 
 registerAction2(TogglePanelAction);
+
+// --- Start Positron ---
+registerAction2(class extends Action2 {
+	constructor() {
+		super({
+			id: 'workbench.action.toggleBottomPanelAvailability',
+			title: localize2('positron.toggleBottomPanelAvailability', "Toggle Bottom Panel Availability"),
+			category: Categories.View,
+			f1: true,
+			metadata: {
+				description: localize('positron.toggleBottomPanelAvailabilityDescription', 'Enable or disable the bottom panel. It is disabled by default.'),
+			}
+		});
+	}
+
+	override run(accessor: ServicesAccessor): void {
+		const layoutService = accessor.get(IWorkbenchLayoutService);
+		const storageService = accessor.get(IStorageService);
+		const notificationService = accessor.get(INotificationService);
+
+		if (isBottomPanelEnabled(storageService)) {
+			setBottomPanelEnabled(storageService, false);
+			layoutService.setPartHidden(true, Parts.PANEL_PART);
+			notificationService.info(localize('positron.bottomPanelDisabled', "The bottom panel is now disabled."));
+		} else {
+			setBottomPanelEnabled(storageService, true);
+			layoutService.setPartHidden(false, Parts.PANEL_PART);
+			notificationService.info(localize('positron.bottomPanelEnabled', "The bottom panel is now enabled."));
+		}
+	}
+});
+// --- End Positron ---
 
 MenuRegistry.appendMenuItem(MenuId.PanelTitle, {
 	command: {
