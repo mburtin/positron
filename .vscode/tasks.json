@@ -869,15 +869,11 @@
 			// before the full minified build and ad-hoc signing.
 			// Run npm lifecycle scripts in the foreground so linked packages
 			// don't compile shared declarations concurrently.
-			// Output: ../VSCode-darwin-arm64/NLM Studio.app (sibling of the repo).
 			"label": "Perso: Build macOS arm64 App",
 			"type": "shell",
-			"command": "fnm install \"$(cat .nvmrc)\" && npm_config_foreground_scripts=true fnm exec --using=.nvmrc -- npm run install-fast && fnm exec --using=.nvmrc -- npm run gulp vscode-darwin-arm64-min && codesign --force --deep --sign - \"../VSCode-darwin-arm64/NLM Studio.app\" && echo \"Built: $(cd .. && pwd)/VSCode-darwin-arm64/NLM Studio.app\"",
+			"command": "npm_config_foreground_scripts=true fnm exec --using=.nvmrc -- npm run install-fast && fnm exec --using=.nvmrc -- npm run gulp vscode-darwin-arm64-min && codesign --force --deep --sign - \"../VSCode-darwin-arm64/NLM Studio.app\" && { command -v uv >/dev/null || brew install uv; } && ROOT=\"$(cd .. && pwd)\" && APP=\"$ROOT/VSCode-darwin-arm64/NLM Studio.app\" && DMG=\"$ROOT/NLM-Studio-darwin-arm64.dmg\" && rm -f \"$DMG\" && uvx --python 3.12 --from 'dmgbuild==1.6.7' dmgbuild -s resources/darwin/dmg/dmg-settings.py -D app_path=\"$APP\" -D app_name=\"NLM Studio.app\" -D background=resources/darwin/dmg/background.png -D icon=resources/darwin/dmg/volume-icon.icns \"NLM Studio\" \"$DMG\" && echo \"Built: $DMG\" && open \"$DMG\"",
 			"options": {
-				"cwd": "${workspaceFolder}",
-				"env": {
-					"CI_PYTHON_PATH": "/opt/homebrew/bin/python3.14"
-				}
+				"cwd": "${workspaceFolder}"
 			},
 			"group": "build",
 			"presentation": {
