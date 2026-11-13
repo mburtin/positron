@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
-import { ProjectAction, TaskAction } from './components/component';
+import { ProjectAction, TaskAction, TaskDialogAction } from './components/component';
 import { createComponents } from './components/registry';
 import { renderDashboard } from './dashboard';
 import { loadLayout, resolveLayout, saveLayout } from './layout';
@@ -57,39 +57,32 @@ async function pickProjectFile(folder: vscode.Uri, section: FileShortcutSection)
 }
 
 /** Collects any input needed for a task action before opening the project details for writing. */
-async function promptForTaskEdit(action: Exclude<TaskAction, { type: 'edit-task-notes' }>, { config }: Project): Promise<TaskEdit | undefined> {
+async function promptForTaskEdit(action: Exclude<TaskAction, TaskDialogAction>): Promise<TaskEdit | undefined> {
 	if (action.type === 'set-task-done') {
 		return action;
 	}
-	if (action.type === 'add-milestone' || action.type === 'add-task') {
-		const title = (await vscode.window.showInputBox({
-			title: action.type === 'add-milestone' ? vscode.l10n.t("Add Milestone") : vscode.l10n.t("Add Task"),
-			prompt: vscode.l10n.t("Enter a title"),
-			validateInput: value => value.trim() ? undefined : vscode.l10n.t("Enter a title."),
-		}))?.trim();
-		if (!title) {
-			return undefined;
-		}
-		if (action.type === 'add-milestone' || !config.milestones.length) {
-			return { type: action.type, title };
-		}
-		const destination = await pickMilestone(config.milestones, title);
-		return destination && { type: 'add-task', title, milestone: destination.index };
-	}
-	const destination = await pickMilestone(config.milestones, action.title, action);
-	return destination && { ...action, destination: destination.index };
+	const title = (await vscode.window.showInputBox({
+		title: vscode.l10n.t("Add Task"),
+		prompt: vscode.l10n.t("Enter a title"),
+		validateInput: value => value.trim() ? undefined : vscode.l10n.t("Enter a title."),
+	}))?.trim();
+	return title ? { type: 'add-task', title } : undefined;
 }
 
-/** Selects a destination for a new or existing task. */
-function pickMilestone(milestones: Project['config']['milestones'], title: string, move?: { milestone?: number }) {
-	const items = [
-		{ label: vscode.l10n.t("No Milestone"), description: undefined, index: undefined },
-		...milestones.map(({ title, date, index }) => ({ label: title, description: date, index })),
-	].filter(item => !move || item.index !== move.milestone);
-	return vscode.window.showQuickPick(items, {
-		title: title,
-		placeHolder: vscode.l10n.t("Choose a milestone for this task"),
-	});
+/** Describes the dialog that edits a task, as the dashboard expects it. */
+function dialogMessage({ action }: { action: TaskDialogAction }) {
+	if (action.type === 'edit-task-notes') {
+		return { type: 'open-task-notes', title: action.title, notes: action.notes };
+	}
+	return action.type === 'edit-task-due'
+		? { type: 'open-task-due', create: false, title: action.title, due: action.due }
+		: { type: 'open-task-due', create: true, title: '', due: '' };
+}
+
+/** Reads a string property from a message sent by the dashboard. */
+function messageText(message: object, key: string): string | undefined {
+	const value = (message as Record<string, unknown>)[key];
+	return typeof value === 'string' ? value : undefined;
 }
 
 export function activate(context: vscode.ExtensionContext): void {
@@ -116,9 +109,10 @@ export function activate(context: vscode.ExtensionContext): void {
 		let loading: vscode.CancellationTokenSource | undefined;
 		let actions = new Map<string, ProjectAction>();
 		let renderedProject: Project | undefined;
-		let notesEditor: { action: Extract<TaskAction, { type: 'edit-task-notes' }>; revision: string; saving: boolean } | undefined;
+		/** The task dialog open in the dashboard. Rendering is paused while it is open so edits are not lost. */
+		let taskDialog: { action: TaskDialogAction; revision: string; saving: boolean } | undefined;
 		const setPage = (project?: Project, error?: boolean) => {
-			if (notesEditor) {
+			if (taskDialog) {
 				return;
 			}
 			const page = renderDashboard(panel.webview, context.extensionUri, clientRoot, folder, components, layout, project, error);
@@ -130,7 +124,7 @@ export function activate(context: vscode.ExtensionContext): void {
 			}
 		};
 		const refresh = async () => {
-			if (notesEditor) {
+			if (taskDialog) {
 				return;
 			}
 			loading?.cancel();
@@ -178,28 +172,47 @@ export function activate(context: vscode.ExtensionContext): void {
 				}
 			}),
 			panel.webview.onDidReceiveMessage(async (message: unknown) => {
-				if (message === 'restore-task-notes') {
-					const editor = notesEditor;
+				if (message === 'restore-task-notes' || message === 'restore-task-due') {
+					const kind = message === 'restore-task-notes' ? 'notes' : 'due';
+					const editor = taskDialog && (taskDialog.action.type === 'edit-task-notes') === (kind === 'notes') ? taskDialog : undefined;
 					void panel.webview.postMessage(editor
-						? { type: 'open-task-notes', title: editor.action.title, notes: editor.action.notes, saving: editor.saving, restore: true }
-						: { type: 'clear-task-notes-draft' });
+						? { ...dialogMessage(editor), saving: editor.saving, restore: true }
+						: { type: `clear-task-${kind}-draft` });
 					return;
 				}
-				if (notesEditor) {
-					const editor = notesEditor;
+				if (taskDialog) {
+					const editor = taskDialog;
 					if (editor.saving) {
 						return;
 					}
-					if (message === 'cancel-task-notes') {
-						notesEditor = undefined;
+					const { action } = editor;
+					if (message === 'cancel-task-notes' || message === 'cancel-task-due') {
+						taskDialog = undefined;
 						void refresh();
-					} else if (message && typeof message === 'object' && 'type' in message && message.type === 'save-task-notes'
-						&& 'notes' in message && typeof message.notes === 'string') {
+					} else if (message && typeof message === 'object') {
+						let edit: TaskEdit | undefined;
+						const saved = messageText(message, 'type');
+						const notes = messageText(message, 'notes');
+						if (saved === 'save-task-notes' && action.type === 'edit-task-notes' && notes !== undefined) {
+							edit = { type: 'set-task-notes', index: action.index, notes };
+						} else if (saved === 'save-task-due' && action.type === 'edit-task-due') {
+							edit = { type: 'set-task-due', index: action.index, due: messageText(message, 'due') ?? '' };
+						} else if (saved === 'save-task-due' && action.type === 'add-deadline') {
+							const title = messageText(message, 'title')?.trim();
+							const due = messageText(message, 'due')?.trim();
+							if (!title || !due) {
+								void panel.webview.postMessage({ type: 'task-due-save-failed', message: vscode.l10n.t("Enter a title and a due date.") });
+								return;
+							}
+							edit = { type: 'add-task', title, due };
+						}
+						if (!edit) {
+							return;
+						}
 						editor.saving = true;
 						try {
-							const { index, milestone } = editor.action;
-							await editProjectTasks(folder.uri, editor.revision, { type: 'set-task-notes', index, milestone, notes: message.notes });
-							notesEditor = undefined;
+							await editProjectTasks(folder.uri, editor.revision, edit);
+							taskDialog = undefined;
 							if (panels.get(key) === panel) {
 								void refresh();
 							}
@@ -207,7 +220,7 @@ export function activate(context: vscode.ExtensionContext): void {
 							editor.saving = false;
 							const reason = error instanceof ProjectDetailsError ? error.message
 								: vscode.l10n.t("Check that {0} is writable and try again.", configPath);
-							void panel.webview.postMessage({ type: 'task-notes-save-failed', message: reason });
+							void panel.webview.postMessage({ type: action.type === 'edit-task-notes' ? 'task-notes-save-failed' : 'task-due-save-failed', message: reason });
 						}
 					}
 					return;
@@ -235,11 +248,11 @@ export function activate(context: vscode.ExtensionContext): void {
 					if (!project || editingDetails.has(key)) {
 						return;
 					}
-					if (typeof action !== 'string' && action.type === 'edit-task-notes') {
+					if (typeof action !== 'string' && (action.type === 'edit-task-notes' || action.type === 'edit-task-due' || action.type === 'add-deadline')) {
 						const editor = { action, revision: project.taskRevision, saving: false };
-						notesEditor = editor;
-						if (!await panel.webview.postMessage({ type: 'open-task-notes', title: action.title, notes: action.notes }) && notesEditor === editor) {
-							notesEditor = undefined;
+						taskDialog = editor;
+						if (!await panel.webview.postMessage(dialogMessage(editor)) && taskDialog === editor) {
+							taskDialog = undefined;
 						}
 						return;
 					}
@@ -262,7 +275,7 @@ export function activate(context: vscode.ExtensionContext): void {
 						} else if (action.type === 'set-manuscript-chapter-done') {
 							await setManuscriptChapterDone(folder.uri, action.path, action.done);
 						} else {
-							const edit = await promptForTaskEdit(action, project);
+							const edit = await promptForTaskEdit(action);
 							if (!edit || panels.get(key) !== panel) {
 								return;
 							}

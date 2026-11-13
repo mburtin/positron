@@ -32,15 +32,19 @@ function readAnchor(value: unknown): CardPlacement['anchor'] {
 	return undefined;
 }
 
+/** Cards that were renamed, so that saved layouts keep their position and size. */
+const renamedCards: ReadonlyMap<string, string> = new Map([['milestones', 'deadlines']]);
+
 /** Reconciles saved sizes and order with the registry, including older order-only layouts. */
 export function resolveLayout(defaults: CardDefaults, saved?: unknown): CardPlacement[] {
 	const remaining = new Map(defaults);
 	const layout: CardPlacement[] = [];
 	if (Array.isArray(saved)) {
 		for (const entry of saved) {
-			const id = typeof entry === 'string' ? entry : entry?.id;
-			const component = typeof id === 'string' ? remaining.get(id) : undefined;
-			if (component) {
+			const savedId = typeof entry === 'string' ? entry : entry?.id;
+			const id = typeof savedId === 'string' ? renamedCards.get(savedId) ?? savedId : undefined;
+			const component = id === undefined ? undefined : remaining.get(id);
+			if (id !== undefined && component) {
 				remaining.delete(id);
 				layout.push({
 					id,

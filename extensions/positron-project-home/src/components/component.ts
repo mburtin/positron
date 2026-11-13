@@ -6,10 +6,14 @@
 import * as vscode from 'vscode';
 import { ChecklistItem, FileShortcutSection, Project, ProjectShortcut, TaskEdit } from '../project';
 
-export type TaskAction = { type: 'add-task' } | { type: 'add-milestone' }
+export type TaskAction = { type: 'add-task' }
 	| Extract<TaskEdit, { type: 'set-task-done' }>
-	| { type: 'edit-task-notes'; index: number; milestone?: number; title: string; notes: string }
-	| { type: 'move-task'; index: number; milestone?: number; title: string };
+	| TaskDialogAction;
+
+/** Task actions that collect their input in a dialog inside the dashboard. */
+export type TaskDialogAction = { type: 'edit-task-notes'; index: number; title: string; notes: string }
+	| { type: 'edit-task-due'; index: number; title: string; due: string }
+	| { type: 'add-deadline' };
 
 type FilePinAction = { type: 'add-file'; section: FileShortcutSection }
 	| { type: 'set-file-pinned'; section: FileShortcutSection; shortcut: ProjectShortcut; pinned: boolean };

@@ -4,8 +4,42 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
-import { checklist, DashboardComponent, empty, escape, list, progress, status } from './component';
+import { daysUntil, groupByUrgency, toDayString, urgencyOf } from '../deadlines';
+import { ProjectTask } from '../project';
+import { checklist, ComponentContext, DashboardComponent, empty, escape, list, progress, status } from './component';
 import { icon } from './icons';
+
+/** Describes how far away a due date is, relative to today. */
+function relativeDue(due: string, today: string): string {
+	const days = daysUntil(due, today);
+	if (days < -1) {
+		return vscode.l10n.t("Overdue by {0} days", -days);
+	}
+	return days === -1 ? vscode.l10n.t("Due yesterday")
+		: days === 0 ? vscode.l10n.t("Due today")
+			: days === 1 ? vscode.l10n.t("Due tomorrow")
+				: vscode.l10n.t("Due in {0} days", days);
+}
+
+/** Formats a calendar date in the user's language without shifting it through a time zone. */
+function formatDay(due: string): string {
+	const [year, month, day] = due.split('-').map(Number);
+	return new Date(year, month - 1, day).toLocaleDateString(vscode.env.language, { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+/** Shows a due date, highlighting it when an open task is overdue or due soon. */
+function dueBadge(due: string, today: string, done: boolean): string {
+	const urgency = done ? 'done' : urgencyOf(due, today);
+	return `<span class="due due-${urgency}" title="${escape(formatDay(due))}">${escape(relativeDue(due, today))}</span>`;
+}
+
+/** Opens the dialog that sets or clears the due date of a task. */
+function dueButton(task: ProjectTask, button: ComponentContext['button']): string {
+	const label = task.due ? vscode.l10n.t("Change Due Date for {0}", task.title) : vscode.l10n.t("Set Due Date for {0}", task.title);
+	return button(label, { type: 'edit-task-due', index: task.index, title: task.title, due: task.due ?? '' }, {
+		iconOnly: true, opensDialog: true, leading: icon('calendar'),
+	});
+}
 
 export function tasks(): DashboardComponent {
 	return {
@@ -14,25 +48,20 @@ export function tasks(): DashboardComponent {
 		columns: 2,
 		nav: true,
 		render({ project: { config }, button }) {
+			const today = toDayString(new Date());
 			const open: string[] = [];
 			const completed: string[] = [];
-			for (const milestone of [undefined, ...config.milestones]) {
-				for (const item of milestone?.tasks ?? config.tasks) {
-					const target = { milestone: milestone?.index, index: item.index };
-					const toggle = button(item.title, { ...target, type: 'set-task-done', done: !item.done }, {
-						iconOnly: true, leading: status(item.done), checked: item.done,
-					});
-					const hasNotes = !!item.notes?.trim();
-					const notes = button(hasNotes ? vscode.l10n.t("Edit Notes for {0}", item.title) : vscode.l10n.t("Add Notes for {0}", item.title), {
-						...target, type: 'edit-task-notes', title: item.title, notes: item.notes ?? '',
-					}, { iconOnly: true, opensDialog: true, leading: icon(hasNotes ? 'written-note' : 'note') });
-					const move = config.milestones.length ? button(milestone?.title ?? vscode.l10n.t("Assign Milestone"), {
-						...target, type: 'move-task', title: item.title,
-					}, { title: vscode.l10n.t("Move Task: {0}", item.title) }) : '';
-					(item.done ? completed : open).push(`${toggle}<div class="grow">${escape(item.title)}
-						${move ? `<div class="task-milestone">${move}</div>` : ''}</div>
-						${item.tag ? `<span class="pill">${escape(item.tag)}</span>` : ''}${notes}`);
-				}
+			for (const item of config.tasks) {
+				const toggle = button(item.title, { type: 'set-task-done', index: item.index, done: !item.done }, {
+					iconOnly: true, leading: status(item.done), checked: item.done,
+				});
+				const hasNotes = !!item.notes?.trim();
+				const notes = button(hasNotes ? vscode.l10n.t("Edit Notes for {0}", item.title) : vscode.l10n.t("Add Notes for {0}", item.title), {
+					type: 'edit-task-notes', index: item.index, title: item.title, notes: item.notes ?? '',
+				}, { iconOnly: true, opensDialog: true, leading: icon('note') });
+				(item.done ? completed : open).push(`${toggle}<div class="grow">${escape(item.title)}
+					${item.due ? `<div class="task-due">${dueBadge(item.due, today, item.done)}</div>` : ''}</div>
+					${item.tag ? `<span class="pill">${escape(item.tag)}</span>` : ''}${dueButton(item, button)}${notes}`);
 			}
 			const activeTasks = open.length ? list(open, 'task-list')
 				: empty(completed.length ? vscode.l10n.t("No open tasks.") : vscode.l10n.t("Use + to add a task."));
@@ -94,24 +123,36 @@ export function manuscript(): DashboardComponent {
 	};
 }
 
-export function milestones(): DashboardComponent {
+/** Lists the open tasks that have a due date, grouped by how soon they are due. */
+export function deadlines(): DashboardComponent {
 	return {
-		id: 'milestones',
-		title: vscode.l10n.t("Milestones"),
+		id: 'deadlines',
+		title: vscode.l10n.t("Deadlines"),
 		columns: 1,
-		render({ project: { config } }) {
+		render({ project: { config }, button }) {
+			const today = toDayString(new Date());
+			const dated = config.tasks.filter((task): task is ProjectTask & { due: string } => !task.done && task.due !== undefined);
+			const groups = groupByUrgency(dated, today);
+			const sections = [
+				{ urgency: 'overdue', heading: vscode.l10n.t("Overdue") },
+				{ urgency: 'upcoming', heading: vscode.l10n.t("Next 7 Days") },
+				{ urgency: 'later', heading: vscode.l10n.t("Later") },
+			] as const;
+			const body = sections.filter(({ urgency }) => groups[urgency].length).map(({ urgency, heading }) => {
+				const items = groups[urgency].map(task => {
+					const toggle = button(task.title, { type: 'set-task-done', index: task.index, done: true }, {
+						iconOnly: true, leading: status(false), checked: false,
+					});
+					return `${toggle}<div class="grow">${escape(task.title)}
+						<div class="task-due">${dueBadge(task.due, today, false)}
+							<span class="muted">${escape(formatDay(task.due))}</span></div></div>${dueButton(task, button)}`;
+				});
+				return `<h3 class="deadline-heading deadline-${urgency}">${escape(heading)}</h3>${list(items, 'task-list')}`;
+			});
 			return {
-				headingIcon: icon('milestone'),
-				headerAction: { label: vscode.l10n.t("Add Milestone"), action: { type: 'add-milestone' }, icon: icon('add') },
-				body: config.milestones.length ? list(config.milestones.map(item => {
-					const done = item.tasks.filter(task => task.done).length;
-					return `${status(item.legacyDone || (item.tasks.length > 0 && done === item.tasks.length))}
-						<div class="grow">${escape(item.title)}
-							${progress(item.tasks, vscode.l10n.t("Progress for {0}", item.title))}
-							<p class="muted">${escape(item.tasks.length ? vscode.l10n.t("{0} of {1} tasks complete", done, item.tasks.length)
-								: vscode.l10n.t("No tasks yet."))}</p>
-						</div>${item.date ? `<span class="muted">${escape(item.date)}</span>` : ''}`;
-				})) : empty(vscode.l10n.t("Use + to add a milestone.")),
+				headingIcon: icon('calendar'),
+				headerAction: { label: vscode.l10n.t("Add Deadline"), action: { type: 'add-deadline' }, icon: icon('add') },
+				body: body.length ? body.join('') : empty(vscode.l10n.t("Set a due date on a task or use + to add a deadline.")),
 			};
 		},
 	};

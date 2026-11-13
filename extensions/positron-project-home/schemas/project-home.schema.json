@@ -26,6 +26,8 @@
 		},
 		"milestones": {
 			"type": "array",
+			"deprecated": true,
+			"description": "Deprecated. Milestones were replaced by task due dates. Existing milestones are shown as tasks, with the milestone date as their due date, and are removed from this file the next time a task is edited.",
 			"items": {
 				"type": "object",
 				"required": ["title"],
@@ -96,7 +98,8 @@
 				"title": { "type": "string" },
 				"done": { "type": "boolean", "default": false },
 				"tag": { "type": "string" },
-				"notes": { "type": "string", "description": "Multiline notes for the task." }
+				"notes": { "type": "string", "description": "Multiline notes for the task." },
+				"due": { "type": "string", "format": "date", "description": "The due date of the task, as YYYY-MM-DD. Open tasks with a due date are listed in Deadlines." }
 			}
 		},
 		"checklistItem": {

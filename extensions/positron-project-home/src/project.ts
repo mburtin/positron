@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
+import { migrateLegacyMilestones, parseDueDate } from './deadlines';
 import { loadManuscript, manuscriptDirectory } from './manuscript';
 import { asRecord, asText, configPath, createFileIfMissing, encodeSettings, legacyConfigPath, projectResource, readOptionalFile } from './settings';
 
@@ -21,22 +22,14 @@ export interface ChecklistItem {
 export interface ProjectTask extends ChecklistItem {
 	index: number;
 	notes?: string;
-}
-
-export interface ProjectMilestone {
-	index: number;
-	title: string;
-	date?: string;
-	/** Completion recorded before milestones supported tasks. */
-	legacyDone: boolean;
-	tasks: ProjectTask[];
+	/** Due date as an ISO calendar date (`YYYY-MM-DD`). */
+	due?: string;
 }
 
 interface ProjectConfig {
 	title?: string;
 	tasks: ProjectTask[];
 	manuscript?: { file?: string; sections: ChecklistItem[]; completedChapters: string[] };
-	milestones: ProjectMilestone[];
 	links: ProjectShortcut[];
 	documents: ProjectShortcut[];
 	data: ProjectShortcut[];
@@ -74,7 +67,7 @@ function readTasks(value: unknown): ProjectTask[] {
 	return readItems(value, (item, index) => {
 		const task = readChecklistItem(item);
 		const notes = typeof item.notes === 'string' ? item.notes : undefined;
-		return task && { ...task, index, notes };
+		return task && { ...task, index, notes, due: parseDueDate(item.due) };
 	});
 }
 
@@ -92,7 +85,9 @@ function taskRevision(raw: Record<string, unknown>): string {
 	return JSON.stringify([raw.tasks, raw.milestones]);
 }
 
-function parseConfig(raw: Record<string, unknown>): ProjectConfig {
+function parseConfig(stored: Record<string, unknown>): ProjectConfig {
+	// Milestones were replaced by task due dates, so older projects are read as if already migrated.
+	const raw = migrateLegacyMilestones(stored);
 	const manuscript = asRecord(raw.manuscript);
 	return {
 		title: asText(raw.title),
@@ -102,13 +97,6 @@ function parseConfig(raw: Record<string, unknown>): ProjectConfig {
 			sections: readItems(manuscript.sections, readChecklistItem),
 			completedChapters: readChapterPaths(manuscript.completedChapters),
 		},
-		milestones: readItems(raw.milestones, (item, index) => {
-			const title = asText(item.title);
-			return title ? {
-				index, title, date: asText(item.date), legacyDone: item.tasks === undefined && item.done === true,
-				tasks: readTasks(item.tasks),
-			} : undefined;
-		}).sort((a, b) => (a.date ?? '\uffff').localeCompare(b.date ?? '\uffff')),
 		links: readShortcuts(raw.links, true),
 		documents: readShortcuts(raw.documents),
 		data: readShortcuts(raw.data),
@@ -182,11 +170,11 @@ export async function removeProjectFileShortcut(folder: vscode.Uri, section: Fil
 }
 
 export type TaskEdit =
-	| { type: 'add-milestone'; title: string }
-	| { type: 'add-task'; title: string; milestone?: number }
-	| { type: 'set-task-done'; index: number; milestone?: number; done: boolean }
-	| { type: 'set-task-notes'; index: number; milestone?: number; notes: string }
-	| { type: 'move-task'; index: number; milestone?: number; destination?: number };
+	| { type: 'add-task'; title: string; due?: string }
+	| { type: 'set-task-done'; index: number; done: boolean }
+	| { type: 'set-task-notes'; index: number; notes: string }
+	/** Sets the due date of a task, or removes it when `due` is empty. */
+	| { type: 'set-task-due'; index: number; due?: string };
 
 /** Provides a localized explanation when project details cannot be updated safely. */
 export class ProjectDetailsError extends Error { }
@@ -212,22 +200,18 @@ export async function setManuscriptChapterDone(folder: vscode.Uri, path: string,
 export async function editProjectTasks(folder: vscode.Uri, revision: string, edit: TaskEdit): Promise<void> {
 	await updateProjectDetails(folder, raw => {
 		if (taskRevision(raw) !== revision) {
-			throw new ProjectDetailsError(vscode.l10n.t("The task list changed. Reopen the notes to load the latest task data."));
+			throw new ProjectDetailsError(vscode.l10n.t("The task list changed. Reopen the dialog to load the latest task data."));
 		}
-		if (edit.type === 'add-milestone') {
-			projectItems(raw, 'milestones').push({ title: edit.title, tasks: [] });
-			return;
+		// Task indexes refer to the migrated list the dashboard displayed, so migrate before editing.
+		const migrated = migrateLegacyMilestones(raw);
+		if (migrated !== raw) {
+			raw.tasks = migrated.tasks;
+			delete raw.milestones;
 		}
-		const tasks = (milestone: number | undefined) => {
-			const owner = milestone === undefined ? raw : asRecord(projectItems(raw, 'milestones')[milestone]);
-			if (!owner) {
-				throw new Error('Invalid milestone');
-			}
-			return projectItems(owner, 'tasks');
-		};
-		const items = tasks(edit.milestone);
+		const items = projectItems(raw, 'tasks');
 		if (edit.type === 'add-task') {
-			items.push({ title: edit.title, done: false });
+			const due = readDueDateEdit(edit.due);
+			items.push({ title: edit.title, done: false, ...(due && { due }) });
 			return;
 		}
 		const task = asRecord(items[edit.index]);
@@ -236,21 +220,35 @@ export async function editProjectTasks(folder: vscode.Uri, revision: string, edi
 		}
 		if (edit.type === 'set-task-done') {
 			task.done = edit.done;
-		} else if (edit.type === 'set-task-notes') {
-			if (edit.notes.trim()) {
-				task.notes = edit.notes;
+		} else if (edit.type === 'set-task-due') {
+			const due = readDueDateEdit(edit.due);
+			if (due) {
+				task.due = due;
 			} else {
-				delete task.notes;
+				delete task.due;
 			}
-		} else if (edit.milestone !== edit.destination) {
-			tasks(edit.destination).push(task);
-			items.splice(edit.index, 1);
+		} else if (edit.notes.trim()) {
+			task.notes = edit.notes;
+		} else {
+			delete task.notes;
 		}
 	});
 }
 
+/** Reads a due date typed by the user, where an empty value means no due date. */
+function readDueDateEdit(value: string | undefined): string | undefined {
+	if (!value?.trim()) {
+		return undefined;
+	}
+	const due = parseDueDate(value);
+	if (!due) {
+		throw new ProjectDetailsError(vscode.l10n.t("Enter a valid due date."));
+	}
+	return due;
+}
+
 /** Gets an editable list without discarding malformed project data. */
-function projectItems(raw: Record<string, unknown>, key: ShortcutSection | 'milestones' | 'tasks'): unknown[] {
+function projectItems(raw: Record<string, unknown>, key: ShortcutSection | 'tasks'): unknown[] {
 	const value = raw[key] === undefined ? raw[key] = [] : raw[key];
 	if (!Array.isArray(value)) {
 		throw new Error('Invalid project details');

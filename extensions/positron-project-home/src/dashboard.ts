@@ -119,9 +119,29 @@ export function renderDashboard(
 			<label class="sr-only" for="task-notes-text">${escape(vscode.l10n.t("Notes"))}</label>
 			<textarea id="task-notes-text" rows="8"></textarea>
 			<p id="task-notes-error" role="alert" hidden></p>
-			<div class="task-notes-actions">
+			<div class="dialog-actions">
 				<button type="button" id="cancel-task-notes">${escape(vscode.l10n.t("Cancel"))}</button>
 				<button type="submit">${escape(vscode.l10n.t("Save Notes"))}</button>
+			</div>
+		</form>
+	</dialog>
+	<dialog id="task-due" aria-labelledby="task-due-heading" aria-describedby="task-due-title">
+		<form method="dialog">
+			<h2 id="task-due-heading" data-edit="${escape(vscode.l10n.t("Due Date"))}" data-create="${escape(vscode.l10n.t("Add Deadline"))}"></h2>
+			<p id="task-due-title" class="muted"></p>
+			<div id="task-due-name-field" class="dialog-field" hidden>
+				<label for="task-due-name">${escape(vscode.l10n.t("Title"))}</label>
+				<input id="task-due-name" type="text" autocomplete="off">
+			</div>
+			<div class="dialog-field">
+				<label for="task-due-date">${escape(vscode.l10n.t("Due Date"))}</label>
+				<input id="task-due-date" type="date">
+			</div>
+			<p id="task-due-error" role="alert" hidden></p>
+			<div class="dialog-actions">
+				<button type="button" id="clear-task-due">${escape(vscode.l10n.t("Clear Due Date"))}</button>
+				<button type="button" id="cancel-task-due">${escape(vscode.l10n.t("Cancel"))}</button>
+				<button type="submit">${escape(vscode.l10n.t("Save"))}</button>
 			</div>
 		</form>
 	</dialog>` : ''}

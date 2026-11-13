@@ -14,7 +14,7 @@ export function taskSummary(): DashboardComponent {
 		columns: 1,
 		metric: true,
 		render({ project: { config } }) {
-			const tasks = [...config.tasks, ...config.milestones.flatMap(milestone => milestone.tasks)];
+			const { tasks } = config;
 			const done = tasks.filter(task => task.done).length;
 			return {
 				headingIcon: icon('progress'),

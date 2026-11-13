@@ -274,12 +274,17 @@
 		return renderGrid;
 	}
 
-	type ViewState = { folder: string | undefined; editing?: boolean; showCompleted?: boolean; notesDraft?: string; pageScroll?: number; manuscriptScroll?: number };
+	type ViewState = {
+		folder: string | undefined; editing?: boolean; showCompleted?: boolean; notesDraft?: string;
+		dueDraft?: { title: string; due: string }; pageScroll?: number; manuscriptScroll?: number;
+	};
 	const { acquireVsCodeApi } = globalThis as typeof globalThis & {
 		acquireVsCodeApi(): {
 			getState(): ViewState | undefined;
 			setState(state: ViewState): void;
-			postMessage(message: string | { type: 'save-task-notes'; notes: string } | { id: string; columns: number; rows: number; anchor?: number[] }[]): void;
+			postMessage(message: string | { type: 'save-task-notes'; notes: string }
+				| { type: 'save-task-due'; title: string; due: string }
+				| { id: string; columns: number; rows: number; anchor?: number[] }[]): void;
 		};
 	};
 	const api = acquireVsCodeApi();
@@ -362,6 +367,78 @@
 	});
 	if (state.notesDraft !== undefined) {
 		api.postMessage('restore-task-notes');
+	}
+
+	const dueDialog = document.querySelector<HTMLDialogElement>('#task-due')!;
+	const dueHeading = dueDialog.querySelector<HTMLElement>('#task-due-heading')!;
+	const dueTitle = dueDialog.querySelector<HTMLElement>('#task-due-title')!;
+	const dueNameField = dueDialog.querySelector<HTMLElement>('#task-due-name-field')!;
+	const dueName = dueDialog.querySelector<HTMLInputElement>('#task-due-name')!;
+	const dueDate = dueDialog.querySelector<HTMLInputElement>('#task-due-date')!;
+	const dueError = dueDialog.querySelector<HTMLElement>('#task-due-error')!;
+	const clearDue = dueDialog.querySelector<HTMLButtonElement>('#clear-task-due')!;
+	const cancelDue = dueDialog.querySelector<HTMLButtonElement>('#cancel-task-due')!;
+	const saveDue = dueDialog.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+	const setSavingDue = (saving: boolean) => {
+		saveDue.disabled = cancelDue.disabled = clearDue.disabled = saving;
+		dueName.readOnly = dueDate.readOnly = saving;
+		dueError.hidden = true;
+	};
+	const saveDueDraft = () => {
+		state.dueDraft = { title: dueName.value, due: dueDate.value };
+		api.setState(state);
+	};
+	cancelDue.addEventListener('click', () => dueDialog.close());
+	clearDue.addEventListener('click', () => {
+		dueDate.value = '';
+		setSavingDue(true);
+		api.postMessage({ type: 'save-task-due', title: '', due: '' });
+	});
+	dueDialog.addEventListener('close', () => {
+		delete state.dueDraft;
+		api.setState(state);
+		api.postMessage('cancel-task-due');
+	});
+	dueDialog.addEventListener('cancel', event => {
+		if (saveDue.disabled) {
+			event.preventDefault();
+		}
+	});
+	dueDialog.addEventListener('submit', event => {
+		event.preventDefault();
+		setSavingDue(true);
+		api.postMessage({ type: 'save-task-due', title: dueName.value, due: dueDate.value });
+	});
+	dueName.addEventListener('input', saveDueDraft);
+	dueDate.addEventListener('input', saveDueDraft);
+	window.addEventListener('message', ({ data }) => {
+		if (data?.type === 'open-task-due' && !dueDialog.open) {
+			const create = !!data.create;
+			const draft = data.restore ? state.dueDraft : undefined;
+			dueHeading.textContent = (create ? dueHeading.dataset.create : dueHeading.dataset.edit) ?? '';
+			dueTitle.textContent = data.title;
+			dueTitle.hidden = create;
+			dueNameField.hidden = !create;
+			// A new deadline needs both fields, while an existing task can have its date cleared.
+			dueName.required = dueDate.required = create;
+			clearDue.hidden = create || !data.due;
+			dueName.value = create ? draft?.title ?? '' : '';
+			dueDate.value = draft?.due ?? data.due;
+			saveDueDraft();
+			setSavingDue(!!data.saving);
+			dueDialog.showModal();
+			(create ? dueName : dueDate).focus();
+		} else if (data?.type === 'task-due-save-failed' && dueDialog.open) {
+			setSavingDue(false);
+			dueError.textContent = data.message;
+			dueError.hidden = false;
+		} else if (data?.type === 'clear-task-due-draft') {
+			delete state.dueDraft;
+			api.setState(state);
+		}
+	});
+	if (state.dueDraft !== undefined) {
+		api.postMessage('restore-task-due');
 	}
 
 	const setEditing = (editing: boolean) => {
