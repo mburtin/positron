@@ -10,6 +10,7 @@ import './actionBarButton.css';
 import React, { useRef, PropsWithChildren, useImperativeHandle, forwardRef } from 'react';
 
 // Other dependencies.
+import { localize } from '../../../../nls.js';
 import { Icon as IconType } from '../../../action/common/action.js';
 import { Icon } from './icon.js';
 import { usePositronActionBarContext } from '../positronActionBarContext.js';
@@ -39,6 +40,8 @@ type ActionBarButtonIconProps = {
 type ActionBarButtonCommonProps = {
 	readonly align?: 'left' | 'right';
 	readonly ariaLabel?: string;
+	readonly badge?: string;
+	readonly badgeWarning?: boolean;
 	readonly border?: boolean;
 	readonly checked?: boolean;
 	readonly dataTestId?: string;
@@ -147,7 +150,10 @@ export const ActionBarButton = forwardRef<
 	// Aria-hide the inner elements and promote the button text to an aria-label in order to
 	// avoid VoiceOver treating buttons as groups. See VSCode issue for more:
 	// https://github.com/microsoft/vscode/issues/181739#issuecomment-1779701917
-	const ariaLabel = props.ariaLabel ? props.ariaLabel : props.label;
+	const baseAriaLabel = props.ariaLabel ? props.ariaLabel : props.label;
+	const ariaLabel = baseAriaLabel && props.badge ?
+		localize('positron.actionBarButton.badgeAriaLabel', "{0} ({1})", baseAriaLabel, props.badge) :
+		baseAriaLabel;
 
 	/**
 	 * ActionBarButtonFace component.
@@ -184,6 +190,14 @@ export const ActionBarButton = forwardRef<
 						label={props.label}
 						maxTextWidth={props.maxTextWidth}
 					/>
+				}
+				{props.badge &&
+					<span className={positronClassNames(
+						'action-bar-button-badge',
+						{ 'warning': optionalBoolean(props.badgeWarning) }
+					)}>
+						{props.badge}
+					</span>
 				}
 				{props.children}
 				{props.dropdownIndicator === 'enabled' &&

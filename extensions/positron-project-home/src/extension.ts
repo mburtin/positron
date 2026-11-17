@@ -11,6 +11,7 @@ import { loadLayout, resolveLayout, saveLayout } from './layout';
 import { createManuscript, manuscriptWatchPaths } from './manuscript';
 import { appendProjectShortcut, editProjectTasks, FileShortcutSection, loadProject, Project, ProjectDetailsError, removeProjectFileShortcut, resolveLinkTarget, setManuscriptChapterDone, TaskEdit } from './project';
 import { configPath, legacyConfigPath, projectResource } from './settings';
+import { promptForNewTask, registerTaskCounter, showTasksPicker } from './tasksPicker';
 
 const viewType = 'positron.projectHome';
 const clientRoot = vscode.Uri.file(__dirname);
@@ -58,15 +59,23 @@ async function pickProjectFile(folder: vscode.Uri, section: FileShortcutSection)
 
 /** Collects any input needed for a task action before opening the project details for writing. */
 async function promptForTaskEdit(action: Exclude<TaskAction, TaskDialogAction>): Promise<TaskEdit | undefined> {
-	if (action.type === 'set-task-done') {
-		return action;
+	return action.type === 'set-task-done' ? action : promptForNewTask();
+}
+
+/** Selects the workspace folder of the project, asking only when there are several. */
+async function pickProjectFolder(): Promise<vscode.WorkspaceFolder | undefined> {
+	const folders = vscode.workspace.workspaceFolders;
+	if (!folders?.length) {
+		await vscode.commands.executeCommand('workbench.action.files.openFolder');
+		return undefined;
 	}
-	const title = (await vscode.window.showInputBox({
-		title: vscode.l10n.t("Add Task"),
-		prompt: vscode.l10n.t("Enter a title"),
-		validateInput: value => value.trim() ? undefined : vscode.l10n.t("Enter a title."),
-	}))?.trim();
-	return title ? { type: 'add-task', title } : undefined;
+	const folder = folders.length === 1 ? folders[0] : (await vscode.window.showQuickPick(
+		folders.map(folder => ({ label: folder.name, description: folder.uri.path, folder })),
+		{ placeHolder: vscode.l10n.t("Select a project to open") },
+	))?.folder;
+	// The folder may have been removed while the user was choosing.
+	return folder && vscode.workspace.workspaceFolders?.some(candidate => candidate.uri.toString() === folder.uri.toString())
+		? folder : undefined;
 }
 
 /** Describes the dialog that edits a task, as the dashboard expects it. */
@@ -335,16 +344,8 @@ export function activate(context: vscode.ExtensionContext): void {
 
 	context.subscriptions.push(
 		vscode.commands.registerCommand('positron.projectHome.open', async () => {
-			const folders = vscode.workspace.workspaceFolders;
-			if (!folders?.length) {
-				await vscode.commands.executeCommand('workbench.action.files.openFolder');
-				return;
-			}
-			const folder = folders.length === 1 ? folders[0] : (await vscode.window.showQuickPick(
-				folders.map(folder => ({ label: folder.name, description: folder.uri.path, folder })),
-				{ placeHolder: vscode.l10n.t("Select a project to open") },
-			))?.folder;
-			if (!folder || !vscode.workspace.workspaceFolders?.some(candidate => candidate.uri.toString() === folder.uri.toString())) {
+			const folder = await pickProjectFolder();
+			if (!folder) {
 				return;
 			}
 			const panel = panels.get(folder.uri.toString());
@@ -354,6 +355,13 @@ export function activate(context: vscode.ExtensionContext): void {
 				bindPanel(folder, vscode.window.createWebviewPanel(viewType, folder.name, vscode.ViewColumn.Active, options(folder)));
 			}
 		}),
+		vscode.commands.registerCommand('positron.projectHome.showTasks', async () => {
+			const folder = await pickProjectFolder();
+			if (folder) {
+				await showTasksPicker(folder);
+			}
+		}),
+		registerTaskCounter(),
 		vscode.window.registerWebviewPanelSerializer(viewType, {
 			async deserializeWebviewPanel(panel, state: { folder?: string } | undefined) {
 				const folder = vscode.workspace.workspaceFolders?.find(folder => folder.uri.toString() === state?.folder);

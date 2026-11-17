@@ -14,6 +14,7 @@ import { Codicon } from '../../../../base/common/codicons.js';
 import { Event } from '../../../../base/common/event.js';
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { isNative } from '../../../../base/common/platform.js';
+import { positronClassNames } from '../../../../base/common/positronUtilities.js';
 import { BrowserViewCommandId } from '../../../../platform/browserView/common/browserView.js';
 import { CommandCenter } from '../../../../platform/commandCenter/common/commandCenter.js';
 import { MenuId, MenuRegistry } from '../../../../platform/actions/common/actions.js';
@@ -114,9 +115,15 @@ export const PositronTopActionBar = (props: PositronTopActionBarProps) => {
 	const showCenterBuiltins = showCenterUI && !commandCenterInTitleBar && (showBrowserButton || showCommandCenter);
 	const hasCenterActions = hasTopActionBarActions(centerActions);
 	const showCenterRegion = showCenterBuiltins || hasCenterActions;
-	// When the browser button remains visible, place replacement actions between the two equal-width
-	// side regions, where the command center was.
+	// Keep the browser button next to the contributed actions when they replace the command center.
 	const replaceCommandCenter = showCenterBuiltins && !showCommandCenter && hasCenterActions;
+	const browserButton = showBrowserButton && (
+		<ActionBarCommandButton
+			ariaLabel={CommandCenter.title(BrowserViewCommandId.Open)}
+			commandId={BrowserViewCommandId.Open}
+			icon={Codicon.globe}
+		/>
+	);
 	const contributedCenterActions = (
 		<TopActionBarContributedActions
 			actionGroups={centerActions}
@@ -147,7 +154,7 @@ export const PositronTopActionBar = (props: PositronTopActionBarProps) => {
 	return (
 		<PositronTopActionBarContextProvider {...props}>
 			<PositronActionBarContextProvider {...props}>
-				<div className='top-action-bar-container'>
+				<div className={positronClassNames('top-action-bar-container', { 'replace-command-center': replaceCommandCenter })}>
 					<PositronActionBar
 						borderBottom={false}
 						paddingLeft={kHorizontalPadding}
@@ -172,23 +179,17 @@ export const PositronTopActionBar = (props: PositronTopActionBarProps) => {
 							/>
 						</ActionBarRegion>
 						{showCenterRegion && (
-							<ActionBarRegion location='center'>
-								{showCenterBuiltins && (
+							<ActionBarRegion gap={6} location='center'>
+								{showCenterBuiltins && !replaceCommandCenter && (
 									<PositronActionBar nestedActionBar={true}>
 										{showFullCenterUI && (
 											<ActionBarRegion justify='right' location='left' width={60}>
-												{showBrowserButton && (
-													<ActionBarCommandButton
-														ariaLabel={CommandCenter.title(BrowserViewCommandId.Open)}
-														commandId={BrowserViewCommandId.Open}
-														icon={Codicon.globe}
-													/>
-												)}
+												{browserButton}
 											</ActionBarRegion>
 										)}
-										{(showCommandCenter || replaceCommandCenter) && (
+										{showCommandCenter && (
 											<ActionBarRegion location='center'>
-												{replaceCommandCenter ? contributedCenterActions : <TopActionBarCommandCenter />}
+												<TopActionBarCommandCenter />
 											</ActionBarRegion>
 										)}
 										{showFullCenterUI && (
@@ -196,7 +197,8 @@ export const PositronTopActionBar = (props: PositronTopActionBarProps) => {
 										)}
 									</PositronActionBar>
 								)}
-								{!replaceCommandCenter && contributedCenterActions}
+								{replaceCommandCenter && browserButton}
+								{contributedCenterActions}
 							</ActionBarRegion>
 						)}
 						<ActionBarRegion gap={6} location='right'>

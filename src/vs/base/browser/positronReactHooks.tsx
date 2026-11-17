@@ -5,7 +5,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { usePositronReactServicesContext } from './positronReactRendererContext.js';
-import { ContextKeyValue, IContextKeyService, RawContextKey } from '../../platform/contextkey/common/contextkey.js';
+import { ContextKeyExpression, ContextKeyValue, IContextKeyService, RawContextKey } from '../../platform/contextkey/common/contextkey.js';
 
 
 // How long an operation has to run before it is worth telling the user it is running, and how long
@@ -172,4 +172,34 @@ export function useContextKeyFromString<T extends ContextKeyValue>(key: string):
 	}, [key, contextKeyService]);
 
 	return value;
+}
+
+/**
+ * Evaluate a context key expression on the root context key service and
+ * re-render when any of the keys it reads changes.
+ * @param expression The expression to evaluate, or undefined.
+ * @returns true if the expression is defined and matches; otherwise, false.
+ */
+export function useContextKeyExpression(expression: ContextKeyExpression | undefined): boolean {
+	const { contextKeyService } = usePositronReactServicesContext();
+	const [matches, setMatches] = useState(() => !!expression && contextKeyService.contextMatchesRules(expression));
+
+	useEffect(() => {
+		if (!expression) {
+			setMatches(false);
+			return;
+		}
+
+		setMatches(contextKeyService.contextMatchesRules(expression));
+
+		const keys = new Set(expression.keys());
+		const disposable = contextKeyService.onDidChangeContext(e => {
+			if (e.affectsSome(keys)) {
+				setMatches(contextKeyService.contextMatchesRules(expression));
+			}
+		});
+		return () => disposable.dispose();
+	}, [expression, contextKeyService]);
+
+	return matches;
 }

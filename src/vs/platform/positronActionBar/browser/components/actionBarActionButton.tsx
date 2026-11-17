@@ -21,6 +21,7 @@ import { isPositronActionBarButtonOptions } from '../../../action/common/action.
 import { IAccessibilityService } from '../../../accessibility/common/accessibility.js';
 import { IModifierKeyStatus, ModifierKeyEmitter } from '../../../../base/browser/dom.js';
 import { usePositronReactServicesContext } from '../../../../base/browser/positronReactRendererContext.js';
+import { useContextKeyExpression, useContextKeyFromString } from '../../../../base/browser/positronReactHooks.js';
 
 /**
  * Determines whether the alternative action should be used.
@@ -90,6 +91,12 @@ export const ActionBarActionButton = (props: ActionBarActionButtonProps) => {
 	const actionBarOptions = menuItemAction?.positronActionBarOptions;
 	const buttonOptions = isPositronActionBarButtonOptions(actionBarOptions) ? actionBarOptions : undefined;
 
+	// Observe the badge, which an extension contributes as a bare context key name.
+	const badgeValue = useContextKeyFromString<number | string>(buttonOptions?.badge ?? '');
+	const badgeWarning = useContextKeyExpression(buttonOptions?.badgeWarning);
+	const badge = buttonOptions?.badge && badgeValue !== undefined && badgeValue !== 0 && badgeValue !== '' ?
+		String(badgeValue) : undefined;
+
 	// State hooks.
 	const [, setMouseInside, mouseInsideRef] = useStateRef(false);
 	const [useAlternativeAction, setUseAlternativeAction] = useState(shouldUseAlternativeAction(services.accessibilityService, menuItemAction));
@@ -127,6 +134,8 @@ export const ActionBarActionButton = (props: ActionBarActionButtonProps) => {
 		<ActionBarButton
 			ref={buttonRef}
 			ariaLabel={action.label ?? action.tooltip}
+			badge={badge}
+			badgeWarning={badgeWarning}
 			border={buttonOptions?.border === true}
 			checked={action.checked}
 			disabled={!action.enabled}

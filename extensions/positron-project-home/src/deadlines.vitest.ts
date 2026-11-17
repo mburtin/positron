@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { daysUntil, groupByUrgency, migrateLegacyMilestones, parseDueDate, toDayString, urgencyOf } from './deadlines';
+import { daysUntil, groupByUrgency, migrateLegacyMilestones, openTaskGroups, openTaskSummary, parseDueDate, toDayString, urgencyOf } from './deadlines';
 
 describe('parseDueDate', () => {
 	it('accepts real calendar dates', () => {
@@ -158,5 +158,39 @@ describe('migrateLegacyMilestones', () => {
 		expect(JSON.stringify(raw)).toBe(before);
 		expect(once).toEqual({ title: 'P', links: raw.links, tasks: [{ title: 'M', done: false, due: '2026-05-05' }] });
 		expect(migrateLegacyMilestones(once)).toBe(once);
+	});
+});
+
+describe('openTaskGroups', () => {
+	it('drops completed tasks and lists the tasks without a due date last, in their original order', () => {
+		const tasks = [
+			{ title: 'Undated A', done: false },
+			{ title: 'Later', done: false, due: '2026-12-31' },
+			{ title: 'Done', done: true, due: '2026-11-01' },
+			{ title: 'Overdue', done: false, due: '2026-11-10' },
+			{ title: 'Undated B', done: false },
+			{ title: 'Soon', done: false, due: '2026-11-15' },
+		];
+		const groups = openTaskGroups(tasks, '2026-11-13');
+		expect({
+			overdue: groups.overdue.map(task => task.title),
+			upcoming: groups.upcoming.map(task => task.title),
+			later: groups.later.map(task => task.title),
+			undated: groups.undated.map(task => task.title),
+		}).toEqual({ overdue: ['Overdue'], upcoming: ['Soon'], later: ['Later'], undated: ['Undated A', 'Undated B'] });
+	});
+});
+
+describe('openTaskSummary', () => {
+	it('counts open tasks and reports an overdue one, ignoring completed tasks', () => {
+		expect([
+			openTaskSummary([], '2026-11-13'),
+			openTaskSummary([{ done: false }, { done: false, due: '2026-11-13' }, { done: true, due: '2026-11-01' }], '2026-11-13'),
+			openTaskSummary([{ done: false, due: '2026-11-12' }, { done: true }], '2026-11-13'),
+		]).toEqual([
+			{ count: 0, overdue: false },
+			{ count: 2, overdue: false },
+			{ count: 1, overdue: true },
+		]);
 	});
 });

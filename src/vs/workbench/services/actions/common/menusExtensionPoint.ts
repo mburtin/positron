@@ -866,7 +866,9 @@ namespace schema {
 	// --- commands contribution point
 
 	// --- Start Positron ---
-	export type IUserFriendlyActionBarButtonOptions = PositronActionBarButtonOptions;
+	export type IUserFriendlyActionBarButtonOptions = Omit<PositronActionBarButtonOptions, 'badgeWarning'> & {
+		badgeWarning?: string;
+	};
 
 	export type IUserFriendlyActionBarCheckboxOptions = Omit<PositronActionBarCheckboxOptions, 'checked'> & {
 		checked: string;
@@ -1059,6 +1061,14 @@ namespace schema {
 						border: {
 							description: localize('vscode.extension.contributes.commandType.actionBarOptions.border', 'Whether to display a border around the action bar button.'),
 							type: 'boolean'
+						},
+						badge: {
+							description: localize('vscode.extension.contributes.commandType.actionBarOptions.badge', 'The name of a context key whose value is shown as a badge after the title. The badge is hidden when the value is empty or 0.'),
+							type: 'string'
+						},
+						badgeWarning: {
+							description: localize('vscode.extension.contributes.commandType.actionBarOptions.badgeWarning', 'Condition which indicates whether the badge is shown with warning colors.'),
+							type: 'string'
 						}
 					}
 				},
@@ -1267,7 +1277,8 @@ commandsExtensionPoint.setHandler(extensions => {
 		let positronActionBarOptions: PositronActionBarOptions | undefined;
 		if (schema.isActionBarButtonOptions(actionBarOptions)) {
 			positronActionBarOptions = {
-				...actionBarOptions
+				...actionBarOptions,
+				badgeWarning: ContextKeyExpr.deserialize(actionBarOptions.badgeWarning)
 			};
 		} else if (schema.isActionBarCheckboxOptions(actionBarOptions)) {
 			positronActionBarOptions = {

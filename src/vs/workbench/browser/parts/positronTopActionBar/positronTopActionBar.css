@@ -18,7 +18,17 @@
 	height: var(--vscode-positronActionBar-iconSize);
 }
 
-.top-action-bar-container > .positron-action-bar > .action-bar-region-center .action-bar-button.border {
+/*
+ * Give bordered actions room when the built-in center controls are hidden. With the browser
+ * button visible, the flexible side regions keep the group centered and limit its width.
+ */
+.top-action-bar-container:not(.replace-command-center) > .positron-action-bar:has(> .action-bar-region-center > .action-bar-button.border) > :is(.action-bar-region-left, .action-bar-region-right) {
+	flex: none;
+}
+
+.top-action-bar-container > .positron-action-bar > .action-bar-region-center > .action-bar-button.border {
+	flex-shrink: 0;
+	width: 25%;
 	min-width: 104px;
 	justify-content: center;
 }

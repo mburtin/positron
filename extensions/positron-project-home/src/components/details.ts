@@ -10,7 +10,7 @@ import { checklist, ComponentContext, DashboardComponent, empty, escape, list, p
 import { icon } from './icons';
 
 /** Describes how far away a due date is, relative to today. */
-function relativeDue(due: string, today: string): string {
+export function relativeDue(due: string, today: string): string {
 	const days = daysUntil(due, today);
 	if (days < -1) {
 		return vscode.l10n.t("Overdue by {0} days", -days);
@@ -22,7 +22,7 @@ function relativeDue(due: string, today: string): string {
 }
 
 /** Formats a calendar date in the user's language without shifting it through a time zone. */
-function formatDay(due: string): string {
+export function formatDay(due: string): string {
 	const [year, month, day] = due.split('-').map(Number);
 	return new Date(year, month - 1, day).toLocaleDateString(vscode.env.language, { year: 'numeric', month: 'short', day: 'numeric' });
 }

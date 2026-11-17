@@ -92,6 +92,26 @@
 	max-height: 100%;
 }
 
+.action-bar-button-badge {
+	min-width: 16px;
+	height: 16px;
+	padding: 0 4px;
+	margin-right: 4px;
+	font-size: 11px;
+	line-height: 16px;
+	font-weight: 600;
+	text-align: center;
+	border-radius: 8px;
+	box-sizing: border-box;
+	color: var(--vscode-badge-foreground);
+	background-color: var(--vscode-badge-background);
+}
+
+.action-bar-button-badge.warning {
+	color: var(--vscode-activityWarningBadge-foreground);
+	background-color: var(--vscode-activityWarningBadge-background);
+}
+
 .disabled .action-bar-button-label {
 	color: var(--vscode-positronActionBar-disabledForeground);
 }

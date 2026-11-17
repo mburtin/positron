@@ -12,7 +12,8 @@
 	"main": "./out/extension.js",
 	"extensionKind": ["ui"],
 	"activationEvents": [
-		"onWebviewPanel:positron.projectHome"
+		"onWebviewPanel:positron.projectHome",
+		"onStartupFinished"
 	],
 	"capabilities": {
 		"virtualWorkspaces": true,
@@ -32,12 +33,30 @@
 					"displayTitle": true,
 					"border": true
 				}
+			},
+			{
+				"command": "positron.projectHome.showTasks",
+				"title": "%command.tasks%",
+				"category": "Positron",
+				"icon": "$(checklist)",
+				"actionBarOptions": {
+					"controlType": "button",
+					"displayTitle": true,
+					"badge": "positronProjectHome.openTaskCount",
+					"badgeWarning": "positronProjectHome.hasOverdueTasks"
+				}
 			}
 		],
 		"menus": {
 			"topActionBar/center": [
 				{
-					"command": "positron.projectHome.open"
+					"command": "positron.projectHome.open",
+					"group": "navigation@1"
+				},
+				{
+					"command": "positron.projectHome.showTasks",
+					"group": "navigation@2",
+					"when": "workspaceFolderCount > 0"
 				}
 			]
 		},

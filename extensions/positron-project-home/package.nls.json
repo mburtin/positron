@@ -1,5 +1,6 @@
 {
 	"displayName": "Project Home",
 	"description": "A dashboard for the current Positron project.",
-	"command.home": "Home"
+	"command.home": "Home",
+	"command.tasks": "Tasks"
 }

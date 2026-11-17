@@ -75,6 +75,15 @@ export type PositronActionBarButtonOptions = {
 	controlType: 'button';
 	displayTitle: boolean;
 	border?: boolean;
+	/**
+	 * The name of a context key whose value is shown as a badge after the title. The badge is
+	 * hidden when the value is undefined, 0 or empty.
+	 */
+	badge?: string;
+	/**
+	 * When true, the badge is shown with warning colors.
+	 */
+	badgeWarning?: ContextKeyExpression;
 };
 
 export type PositronActionBarCheckboxOptions = {

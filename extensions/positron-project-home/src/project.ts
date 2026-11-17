@@ -131,6 +131,12 @@ async function readConfig(folder: vscode.Uri): Promise<{ state: ConfigState; con
 	}
 }
 
+/** Reads only the task list, without the file scans needed by the dashboard. */
+export async function loadProjectTasks(folder: vscode.Uri): Promise<{ tasks: ProjectTask[]; taskRevision: string }> {
+	const { config, taskRevision } = await readConfig(folder);
+	return { tasks: config.tasks, taskRevision };
+}
+
 /** Accepts HTTPS links without credentials. */
 export function resolveLinkTarget(target: string): string | undefined {
 	if (!/^https:\/\//i.test(target)) {

@@ -73,6 +73,26 @@ export function groupByUrgency<T extends { due: string }>(items: readonly T[], t
 	return groups;
 }
 
+export interface OpenTaskGroups<T> extends UrgencyGroups<T & { due: string }> {
+	undated: T[];
+}
+
+/** Splits the open tasks by urgency, with the tasks that have no due date last in their original order. */
+export function openTaskGroups<T extends { done: boolean; due?: string }>(tasks: readonly T[], today: string): OpenTaskGroups<T> {
+	const open = tasks.filter(task => !task.done);
+	const dated = open.filter((task): task is T & { due: string } => task.due !== undefined);
+	return { ...groupByUrgency(dated, today), undated: open.filter(task => task.due === undefined) };
+}
+
+/** Counts the open tasks and reports whether any of them is overdue. */
+export function openTaskSummary(tasks: readonly { done: boolean; due?: string }[], today: string): { count: number; overdue: boolean } {
+	const open = tasks.filter(task => !task.done);
+	return {
+		count: open.length,
+		overdue: open.some(task => task.due !== undefined && urgencyOf(task.due, today) === 'overdue'),
+	};
+}
+
 /**
  * Folds the retired milestones into the task list without modifying `raw`.
  *
