@@ -477,9 +477,11 @@ export class RuntimeStartupService extends Disposable implements IRuntimeStartup
 					return;
 				}
 
-				// Ignore when sessions "exited" due to being transferred or restarted.
+				// Ignore when sessions "exited" due to being transferred or
+				// restarted, or because the extension host disconnected.
 				if (exit.reason === RuntimeExitReason.Transferred ||
-					exit.reason === RuntimeExitReason.Restart) {
+					exit.reason === RuntimeExitReason.Restart ||
+					exit.reason === RuntimeExitReason.ExtensionHost) {
 					return;
 				}
 
@@ -3319,7 +3321,8 @@ export class RuntimeStartupService extends Disposable implements IRuntimeStartup
 			.filter(session =>
 				session.getRuntimeState() !== RuntimeState.Uninitialized &&
 				session.getRuntimeState() !== RuntimeState.Initializing &&
-				session.getRuntimeState() !== RuntimeState.Exited
+				(session.getRuntimeState() !== RuntimeState.Exited ||
+					this._runtimeSessionService.isSessionDisconnected(session.metadata.sessionId))
 			)
 			.map(session => {
 				const activeSession =
@@ -3434,30 +3437,47 @@ export class RuntimeStartupService extends Disposable implements IRuntimeStartup
 			this._configurationService.getValue<boolean>('interpreters.restartOnCrash');
 
 		let action;
+		let replaced = false;
 
 		if (restartOnCrash) {
 			// Wait a beat, then start the runtime.
 			await new Promise<void>(resolve => setTimeout(resolve, 250));
 
-			await this._runtimeSessionService.restartSession(
+			const restarted = await this._runtimeSessionService.restartSession(
 				session.sessionId,
 				`The runtime exited unexpectedly and is being restarted automatically.`
 			);
 
-			action = 'and was automatically restarted';
+			if (restarted) {
+				action = 'and was automatically restarted';
+			} else {
+				// The restart did not run: either another session took over the
+				// notebook during the wait, or the user declined to interrupt.
+				const notebookUri = session.metadata.notebookUri;
+				const owner = notebookUri && this._runtimeSessionService.getNotebookSessionForNotebookUri(notebookUri);
+				replaced = !!owner && owner.sessionId !== session.sessionId;
+				action = 'and was not automatically restarted';
+			}
 		} else {
 			// If we're not going to restart, clean up the Ext Host.
 			action = 'and was not automatically restarted';
 		}
 
 		// Let the user know what we did.
-		const msg = nls.localize(
-			'positronConsole.runtimeCrashed',
-			'{0} exited unexpectedly {1}. You may have lost unsaved work.\nExit code: {2}',
-			session.runtimeMetadata.runtimeName,
-			action,
-			exit.exit_code
-		);
+		const msg = replaced
+			? nls.localize(
+				'positron.runtimeStartup.runtimeCrashedReplaced',
+				"{0} exited unexpectedly and was not restarted, because another session now runs for its notebook. You may have lost unsaved work.\nExit code: {1}",
+				session.runtimeMetadata.runtimeName,
+				exit.exit_code
+			)
+			: nls.localize(
+				'positronConsole.runtimeCrashed',
+				'{0} exited unexpectedly {1}. You may have lost unsaved work.\nExit code: {2}',
+				session.runtimeMetadata.runtimeName,
+				action,
+				exit.exit_code
+			);
 
 		this._notificationService.prompt(Severity.Warning, msg, [
 			{

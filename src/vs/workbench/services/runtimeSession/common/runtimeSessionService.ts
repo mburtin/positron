@@ -663,6 +663,20 @@ export interface ILanguageRuntimePackage {
 	sourceRepository?: string;
 
 	/**
+	 * Whether the copy the session imports ships with Positron itself (e.g.
+	 * bundled ipykernel dependencies on the kernel's search path) rather than
+	 * being installed in the user's environment.
+	 */
+	bundled?: boolean;
+
+	/**
+	 * For a bundled package, the version also installed in the user's
+	 * environment, which the bundled copy shadows. Undefined when the
+	 * environment does not have the package.
+	 */
+	environmentVersion?: string;
+
+	/**
 	 * Known security advisories affecting the *installed* version, from the
 	 * Posit Package Manager instance the environment installs from. Three
 	 * states: `undefined` means no vulnerability data is available (no PPM
@@ -675,6 +689,14 @@ export interface ILanguageRuntimePackage {
 	 * runtime -- runtimes only report which repository they install from.
 	 */
 	vulnerabilities?: IPackageVulnerability[];
+}
+
+/**
+ * Whether only Positron's bundle provides the package: the session imports a
+ * bundled copy and the user's environment has no copy of its own.
+ */
+export function isBundledOnly(pkg: ILanguageRuntimePackage): boolean {
+	return pkg.bundled === true && pkg.environmentVersion === undefined;
 }
 
 /**
@@ -1053,6 +1075,12 @@ export interface IRuntimeSessionService {
 	getActiveSession(sessionId: string): ActiveRuntimeSession | undefined;
 
 	/**
+	 * Checks whether a session lost its extension host and waits to be
+	 * reconnected.
+	 */
+	isSessionDisconnected(sessionId: string): boolean;
+
+	/**
 	 * Gets the last created console session by runtime identifier
 	 */
 	getConsoleSessionForRuntime(runtimeId: string): ILanguageRuntimeSession | undefined;
@@ -1202,8 +1230,9 @@ export interface IRuntimeSessionService {
 	 *  restart, if any.
 	 * @returns `true` if the session was restarted (or a restart already
 	 *  in progress completed), `false` if the restart was declined by
-	 *  the user. Rejects if the session is not found or not in a
-	 *  restartable state.
+	 *  the user or, for an exited notebook session, skipped because
+	 *  another session now owns the notebook. Rejects if the session is
+	 *  not found or not in a restartable state.
 	 */
 	restartSession(sessionId: string, source: string, interrupt?: boolean, requestingExtensionId?: string): Promise<boolean>;
 
