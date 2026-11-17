@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 // React.
-import { KeyboardEvent, MouseEvent, useEffect, useState } from 'react';
+import { KeyboardEvent, MouseEvent, useEffect, useId, useState } from 'react';
 
 // Other dependencies.
 import * as DOM from '../../../../base/browser/dom.js';
@@ -13,12 +13,15 @@ import { usePositronReactServicesContext } from '../../../../base/browser/positr
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import Severity from '../../../../base/common/severity.js';
 import { IMenuService, MenuId } from '../../../../platform/actions/common/actions.js';
+import { asCssVariable } from '../../../../platform/theme/common/colorUtils.js';
+import { positronClassNames } from '../../../../base/common/positronUtilities.js';
 import { isMacintosh } from '../../../../base/common/platform.js';
 import { ITerminalInstance, ITerminalService } from '../../terminal/browser/terminal.js';
 import { UNIFIED_TERMINAL_PANEL_ID } from './unifiedSessionsLayout.js';
 import { openContextMenu } from '../../terminal/browser/terminalContextMenu.js';
 import { getColorClass, getIconId } from '../../terminal/browser/terminalIcon.js';
-import { TerminalCommandId } from '../../terminal/common/terminal.js';
+import { getColorForSeverity } from '../../terminal/browser/terminalStatusList.js';
+import { ITerminalStatus, TerminalCommandId } from '../../terminal/common/terminal.js';
 
 /**
  * UnifiedTerminalTabProps interface.
@@ -26,6 +29,7 @@ import { TerminalCommandId } from '../../terminal/common/terminal.js';
 interface UnifiedTerminalTabProps {
 	readonly instance: ITerminalInstance;
 	readonly active: boolean;
+	readonly compact: boolean;
 	readonly terminalService: ITerminalService;
 	readonly onSelect: (instance: ITerminalInstance) => void;
 }
@@ -38,7 +42,7 @@ interface TabAppearance {
 	readonly description: string | undefined;
 	readonly iconId: string;
 	readonly colorClass: string | undefined;
-	readonly statusTooltip: string | undefined;
+	readonly status: ITerminalStatus | undefined;
 }
 
 /**
@@ -49,7 +53,7 @@ interface TabAppearance {
  * @returns The rendered component.
  */
 export const UnifiedTerminalTab = (props: UnifiedTerminalTabProps) => {
-	const { instance, active, terminalService, onSelect } = props;
+	const { instance, active, compact, terminalService, onSelect } = props;
 	const services = usePositronReactServicesContext();
 
 	const getAppearance = (): TabAppearance => {
@@ -58,12 +62,13 @@ export const UnifiedTerminalTab = (props: UnifiedTerminalTabProps) => {
 		return {
 			title: instance.title,
 			description: instance.description,
-			iconId: (showStatus && status.icon?.id) || services.instantiationService.invokeFunction(getIconId, instance),
+			iconId: services.instantiationService.invokeFunction(getIconId, instance),
 			colorClass: getColorClass(instance),
-			statusTooltip: showStatus ? status.tooltip : undefined,
+			status: showStatus ? status : undefined,
 		};
 	};
 	const [appearance, setAppearance] = useState(getAppearance);
+	const statusDescriptionId = useId();
 
 	// Follow the terminal's title, icon, color and status.
 	useEffect(() => {
@@ -77,6 +82,9 @@ export const UnifiedTerminalTab = (props: UnifiedTerminalTabProps) => {
 		// eslint-disable-next-line react-hooks/exhaustive-deps -- getAppearance only reads the instance and services.
 	}, [instance, services]);
 
+	const { status } = appearance;
+	const iconId = !compact && status?.icon ? status.icon.id : appearance.iconId;
+	const statusColor = status ? getColorForSeverity(status.severity) : undefined;
 	const label = appearance.description ? `${appearance.title} - ${appearance.description}` : appearance.title;
 
 	const handleClick = (e: MouseEvent<HTMLDivElement>) => {
@@ -143,38 +151,49 @@ export const UnifiedTerminalTab = (props: UnifiedTerminalTabProps) => {
 	return (
 		<div
 			aria-controls={active ? UNIFIED_TERMINAL_PANEL_ID : undefined}
+			aria-describedby={status?.tooltip ? statusDescriptionId : undefined}
 			aria-label={label}
 			aria-selected={active}
-			className={`tab-button unified-terminal-tab${active ? ' tab-button--active' : ''}`}
+			className={positronClassNames('tab-button', 'unified-terminal-tab', { 'tab-button--active': active, 'tab-button--compact': compact })}
 			data-testid={`terminal-tab-${instance.instanceId}`}
 			role='tab'
 			tabIndex={active ? 0 : -1}
-			title={appearance.statusTooltip ? `${label}\n${appearance.statusTooltip}` : label}
+			title={status?.tooltip ? `${label}\n${status.tooltip}` : label}
 			onAuxClick={handleAuxClick}
 			onClick={handleClick}
 			onContextMenu={handleContextMenu}
 			onKeyDown={handleKeyDown}
 		>
+			{status?.tooltip && <span hidden id={statusDescriptionId}>{status.tooltip}</span>}
 			<div className={`tab-header${appearance.colorClass ? ` ${appearance.colorClass}` : ''}`}>
-				<span className={`codicon codicon-${appearance.iconId}`} />
-				<p className='session-name'>{appearance.title}</p>
-				<button
-					aria-label={localize('positron.unifiedSessions.splitTerminal', "Split Terminal")}
-					className='split-button'
-					onClick={handleSplit}
-					onMouseDown={e => { e.preventDefault(); e.stopPropagation(); }}
-				>
-					<span className='codicon codicon-split-horizontal' />
-				</button>
-				<button
-					aria-label={localize('positron.unifiedSessions.closeTerminal', "Close Terminal")}
-					className='delete-button'
-					onClick={handleClose}
-					onKeyDown={handleCloseKeyDown}
-					onMouseDown={e => { e.preventDefault(); e.stopPropagation(); }}
-				>
-					<span className='codicon codicon-trash' />
-				</button>
+				<div className='session-icons'>
+					<span className={`codicon codicon-${iconId}`} />
+					{compact && status &&
+						<span aria-hidden='true' className='tab-status-dot' style={{ color: statusColor ? asCssVariable(statusColor) : undefined }} />
+					}
+				</div>
+				{!compact &&
+					<>
+						<p className='session-name'>{appearance.title}</p>
+						<button
+							aria-label={localize('positron.unifiedSessions.splitTerminal', "Split Terminal")}
+							className='split-button'
+							onClick={handleSplit}
+							onMouseDown={e => { e.preventDefault(); e.stopPropagation(); }}
+						>
+							<span className='codicon codicon-split-horizontal' />
+						</button>
+						<button
+							aria-label={localize('positron.unifiedSessions.closeTerminal', "Close Terminal")}
+							className='delete-button'
+							onClick={handleClose}
+							onKeyDown={handleCloseKeyDown}
+							onMouseDown={e => { e.preventDefault(); e.stopPropagation(); }}
+						>
+							<span className='codicon codicon-trash' />
+						</button>
+					</>
+				}
 			</div>
 		</div>
 	);

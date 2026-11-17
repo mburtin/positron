@@ -68,10 +68,10 @@ export class Sessions {
 	get deleteMenuItem() { return this.page.getByRole('menuitem', { name: 'Delete' }); }
 
 	// Session status indicators
-	private activeStatus = (session: Locator) => session.locator(ACTIVE_STATUS_ICON);
-	private idleStatus = (session: Locator) => session.locator(IDLE_STATUS_ICON);
-	private disconnectedStatus = (session: Locator) => session.locator(DISCONNECTED_STATUS_ICON);
-	private get activeStatusIcon() { return this.page.locator(ACTIVE_STATUS_ICON); }
+	private activeStatus = (session: Locator) => session.getByTestId('runtime-status-active');
+	private idleStatus = (session: Locator) => session.getByTestId('runtime-status-idle');
+	private disconnectedStatus = (session: Locator) => session.getByTestId('runtime-status-disconnected');
+	private get activeStatusIcon() { return this.page.locator(ACTIVE_STATUS_ICON).or(this.page.getByTestId('runtime-status-active')); }
 
 	// Session Metadata
 	private get metadataButton() { return this.page.getByRole('button', { name: 'Console information' }); }
@@ -962,7 +962,7 @@ export class Sessions {
 		const tabs = await this.sessionTabs.evaluateAll(els =>
 			els.map(el => ({
 				testId: el.getAttribute('data-testid'),
-				isDisconnected: el.querySelector('.codicon-positron-runtime-status-disconnected') !== null,
+				isDisconnected: el.querySelector('[data-testid="runtime-status-disconnected"]') !== null,
 			}))
 		);
 		const activeSessions = tabs
@@ -1035,9 +1035,8 @@ export class Sessions {
 			await this.page.waitForTimeout(500);
 			await this.renameMenuItem.click();
 
-			// input the new name
-			await expect(sessionTab.getByRole('textbox')).toBeVisible();
-			await sessionTab.getByRole('textbox').fill(newName);
+			const renameInput = sessionTab.getByRole('textbox').or(this.quickinput.quickInput).filter({ visible: true });
+			await renameInput.fill(newName);
 			await this.page.keyboard.press('Enter');
 		});
 	}
@@ -1104,12 +1103,10 @@ export class Sessions {
 			const sessionCount = await this.getSessionCount();
 
 			if (sessionCount > 1) {
-				// get status from icon in tab list view
 				const sessionTab = this.getSessionTab(sessionIdOrName);
-				const statusClass = `.codicon-positron-runtime-status-${expectedStatus}`;
 
 				await expect(sessionTab).toBeVisible();
-				await expect(sessionTab.locator(statusClass)).toBeVisible({ timeout });
+				await expect(sessionTab.getByTestId(`runtime-status-${expectedStatus}`)).toBeVisible({ timeout });
 			} else if (sessionCount === 1) {
 				// get status from metadata dialog because there is no tab list view
 				await this.openMetadataDialog();

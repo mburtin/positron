@@ -437,9 +437,29 @@
 	margin-right: 0;
 }
 
-.monaco-workbench .pane-body.integrated-terminal .tabs-container:not(.has-text) .terminal-tabs-entry .codicon {
-	/* Force inherit when no text is showing as the regular icon gets replaced by the status icon */
-	color: inherit;
+.monaco-workbench .pane-body.integrated-terminal .terminal-tabs-entry[data-compact-status] .monaco-highlighted-label .codicon {
+	position: relative;
+}
+
+.monaco-workbench .pane-body.integrated-terminal .terminal-tabs-entry[data-compact-status] .monaco-highlighted-label .codicon::after {
+	content: '';
+	position: absolute;
+	inset-block-start: 0;
+	inset-inline-end: calc(-1 * var(--vscode-spacing-size20));
+	width: var(--vscode-spacing-size60);
+	height: var(--vscode-spacing-size60);
+	border-radius: var(--vscode-cornerRadius-circle);
+	background-color: var(--vscode-foreground);
+	outline: 1px solid var(--vscode-contrastBorder, transparent);
+	pointer-events: none;
+}
+
+.monaco-workbench .pane-body.integrated-terminal .terminal-tabs-entry[data-compact-status='warning'] .monaco-highlighted-label .codicon::after {
+	background-color: var(--vscode-list-warningForeground);
+}
+
+.monaco-workbench .pane-body.integrated-terminal .terminal-tabs-entry[data-compact-status='error'] .monaco-highlighted-label .codicon::after {
+	background-color: var(--vscode-list-errorForeground);
 }
 
 .monaco-workbench .pane-body.integrated-terminal .tabs-container:not(.has-text) .monaco-icon-description-container {

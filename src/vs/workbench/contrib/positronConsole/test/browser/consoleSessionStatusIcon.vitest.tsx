@@ -50,28 +50,28 @@ describe('ConsoleSessionStatusIcon', () => {
 		act(() => displayStateEmitter.fire({ sessionId, state }));
 	}
 
-	it('renders the disconnected icon when no session is attached', () => {
+	it('renders the disconnected dot when no session is attached', () => {
 		displayState = undefined;
-		rtl.render(<ConsoleSessionStatusIcon positronConsoleInstance={makeInstance(undefined)} />);
+		rtl.render(<ConsoleSessionStatusIcon descriptionId='session-status' positronConsoleInstance={makeInstance(undefined)} />);
 		expect(screen.getByTestId('runtime-status-disconnected')).toBeInTheDocument();
 	});
 
-	it('renders the idle icon when display state is Idle', () => {
+	it('renders the idle dot when display state is Idle', () => {
 		displayState = RuntimeState.Idle;
-		rtl.render(<ConsoleSessionStatusIcon positronConsoleInstance={makeInstance('s1')} />);
+		rtl.render(<ConsoleSessionStatusIcon descriptionId='session-status' positronConsoleInstance={makeInstance('s1')} />);
 		expect(screen.getByTestId('runtime-status-idle')).toBeInTheDocument();
 	});
 
-	it('shows the active icon when display state is Restarting', () => {
+	it('shows the active dot when display state is Restarting', () => {
 		displayState = RuntimeState.Idle;
-		rtl.render(<ConsoleSessionStatusIcon positronConsoleInstance={makeInstance('s1')} />);
+		rtl.render(<ConsoleSessionStatusIcon descriptionId='session-status' positronConsoleInstance={makeInstance('s1')} />);
 		setDisplayState('s1', RuntimeState.Restarting);
 		expect(screen.getByTestId('runtime-status-active')).toBeInTheDocument();
 	});
 
-	it('switches to the active icon when display state goes Busy', () => {
+	it('switches to the active dot when display state goes Busy', () => {
 		displayState = RuntimeState.Idle;
-		rtl.render(<ConsoleSessionStatusIcon positronConsoleInstance={makeInstance('s1')} />);
+		rtl.render(<ConsoleSessionStatusIcon descriptionId='session-status' positronConsoleInstance={makeInstance('s1')} />);
 		setDisplayState('s1', RuntimeState.Busy);
 		expect(screen.getByTestId('runtime-status-active')).toBeInTheDocument();
 	});
@@ -79,9 +79,9 @@ describe('ConsoleSessionStatusIcon', () => {
 	it('stays active during a restart even after the console detaches its runtime', () => {
 		// On restart the kernel exits and the console detaches, so
 		// attachedRuntimeSession is undefined. The service still reports the
-		// session as Restarting, so the icon must read by sessionId and stay active.
+		// session as Restarting, so the dot must read by sessionId and stay active.
 		displayState = RuntimeState.Restarting;
-		rtl.render(<ConsoleSessionStatusIcon positronConsoleInstance={makeInstance('s1', { attached: false })} />);
+		rtl.render(<ConsoleSessionStatusIcon descriptionId='session-status' positronConsoleInstance={makeInstance('s1', { attached: false })} />);
 		expect(screen.getByTestId('runtime-status-active')).toBeInTheDocument();
 	});
 });

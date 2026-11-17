@@ -9,6 +9,7 @@ import { IAction } from '../../../../../base/common/actions.js';
 import { Event } from '../../../../../base/common/event.js';
 import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
 import { IContextMenuDelegate } from '../../../../../base/browser/contextmenu.js';
+import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
 import { IHoverManager } from '../../../../../platform/hover/browser/hoverManager.js';
 import { ILanguageRuntimeMetadata, LanguageRuntimeSessionMode, RuntimeState } from '../../../../services/languageRuntime/common/languageRuntimeService.js';
 import { IPositronConsoleService } from '../../../../services/positronConsole/browser/interfaces/positronConsoleService.js';
@@ -30,13 +31,16 @@ describe('ConsoleTab', () => {
 	// whole strip shares), so the tests hand it a fake rather than reaching
 	// into IHoverService.
 	const showHover = vi.fn<IHoverManager['showHover']>();
+	const getHistory = vi.fn<IResourceUsageHistoryService['getHistory']>().mockResolvedValue([]);
+	const quickInput = vi.fn<IQuickInputService['input']>();
 	const hideHover = vi.fn<IHoverManager['hideHover']>();
 	const hoverManager: IHoverManager = { showHover, hideHover };
 
 	const ctx = createTestContainer()
 		.withReactServices()
 		.stub(IContextMenuService, { showContextMenu })
-		.stub(IResourceUsageHistoryService, { getHistory: async () => [] })
+		.stub(IQuickInputService, { input: quickInput })
+		.stub(IResourceUsageHistoryService, { getHistory })
 		.build();
 	const rtl = setupRTLRenderer(() => ctx.reactServices);
 
@@ -71,12 +75,11 @@ describe('ConsoleTab', () => {
 			rtl.render(
 				<PositronConsoleContextProvider>
 					<ConsoleTab
-						hideSessionName={false}
+						compact={false}
 						hoverManager={hoverManager}
 						positronConsoleInstance={instance}
 						width={200}
 						onChangeSession={() => { }}
-						onSessionNameHiddenChange={() => { }}
 					/>
 				</PositronConsoleContextProvider>
 			);
@@ -269,12 +272,11 @@ describe('ConsoleTab', () => {
 			rtl.render(
 				<PositronConsoleContextProvider>
 					<ConsoleTab
-						hideSessionName={false}
+						compact={false}
 						hoverManager={hoverManager}
 						positronConsoleInstance={instance}
 						width={200}
 						onChangeSession={() => { }}
-						onSessionNameHiddenChange={() => { }}
 					/>
 				</PositronConsoleContextProvider>
 			);
@@ -301,18 +303,94 @@ describe('ConsoleTab', () => {
 		});
 	});
 
+	describe('compact tabs', () => {
+		it('hides the resource monitor only in compact mode and keeps the tab focused', async () => {
+			const sessionName = 'My Python Session';
+			const instance = addActiveConsoleInstance('compact-session-1', sessionName);
+			getHistory.mockResolvedValueOnce([{
+				cpu_percent: 42,
+				memory_bytes: 256 * 1024 * 1024,
+				thread_count: 1,
+				sampling_period_ms: 1000,
+				timestamp: 0,
+			}]);
+			const renderTab = (compact: boolean) => (
+				<PositronConsoleContextProvider>
+					<ConsoleTab
+						compact={compact}
+						hoverManager={hoverManager}
+						positronConsoleInstance={instance}
+						width={compact ? 60 : 200}
+						onChangeSession={() => { }}
+					/>
+				</PositronConsoleContextProvider>
+			);
+
+			const { rerender } = rtl.render(renderTab(false));
+			expect(await screen.findByText('42%')).toBeInTheDocument();
+			const tab = screen.getByRole('tab', { name: sessionName });
+			act(() => tab.focus());
+			expect(tab).toHaveAccessibleDescription('Interpreter disconnected');
+
+			rerender(renderTab(true));
+			expect(tab).toHaveFocus();
+			expect(tab).toHaveAccessibleDescription('Interpreter disconnected');
+			expect(screen.queryByText(sessionName)).not.toBeInTheDocument();
+			expect(screen.queryByText('42%')).not.toBeInTheDocument();
+			expect(screen.queryByRole('button', { name: 'Delete Session' })).not.toBeInTheDocument();
+
+			rerender(renderTab(false));
+			expect(tab).toHaveFocus();
+			expect(screen.getByText(sessionName)).toBeInTheDocument();
+			expect(screen.getByText('42%')).toBeInTheDocument();
+			expect(screen.getByRole('button', { name: 'Delete Session' })).toBeInTheDocument();
+		});
+
+		it('opens a rename prompt from the keyboard context menu', async () => {
+			const sessionName = 'My Python Session';
+			const instance = addActiveConsoleInstance('compact-session-2', sessionName);
+			const updateSessionName = vi.spyOn(ctx.reactServices.runtimeSessionService, 'updateSessionName')
+				.mockImplementation(() => { });
+			quickInput.mockResolvedValueOnce('Renamed Python Session');
+
+			rtl.render(
+				<PositronConsoleContextProvider>
+					<ConsoleTab
+						compact={true}
+						hoverManager={hoverManager}
+						positronConsoleInstance={instance}
+						width={60}
+						onChangeSession={() => { }}
+					/>
+				</PositronConsoleContextProvider>
+			);
+			const tab = screen.getByRole('tab', { name: sessionName });
+			act(() => tab.focus());
+			await userEvent.setup().keyboard('{Shift>}{F10}{/Shift}');
+
+			const delegate = showContextMenu.mock.calls.at(-1)![0];
+			const renameAction = (delegate.getActions() as IAction[])
+				.find(action => action.id === 'workbench.action.positronConsole.renameConsoleSession');
+			await act(async () => {
+				await renameAction!.run();
+			});
+
+			expect(quickInput).toHaveBeenCalledWith(expect.objectContaining({ value: sessionName }));
+			expect(updateSessionName).toHaveBeenCalledWith(instance.sessionId, 'Renamed Python Session');
+		});
+	});
+
 	describe('session name tooltip', () => {
-		function renderTab(sessionId: string, sessionName: string, hideSessionName: boolean) {
+		function renderTab(sessionId: string, sessionName: string, compact: boolean) {
 			const instance = addActiveConsoleInstance(sessionId, sessionName);
 			rtl.render(
 				<PositronConsoleContextProvider>
 					<ConsoleTab
-						hideSessionName={hideSessionName}
+						compact={compact}
 						hoverManager={hoverManager}
 						positronConsoleInstance={instance}
 						width={200}
 						onChangeSession={() => { }}
-						onSessionNameHiddenChange={() => { }}
 					/>
 				</PositronConsoleContextProvider>
 			);
@@ -321,7 +399,7 @@ describe('ConsoleTab', () => {
 
 		// jsdom reports every element as zero-width, so getFittedSessionName
 		// always finds that the full name fits: the rendered name is never cut
-		// short on its own here. hideSessionName is a plain prop, so it drives
+		// short on its own here. compact is a plain prop, so it drives
 		// the truncated case. Undefined content is how IHoverManager is told not
 		// to show a hover at all.
 		it('offers the full session name when the tab has no room to show it', async () => {
@@ -341,13 +419,12 @@ describe('ConsoleTab', () => {
 		});
 
 		// The hover must be driven by mouseenter, which doesn't bubble, and not
-		// by mouseover, which does: the tab wraps two icons, a resource graph
-		// and a delete button, so a bubbling trigger re-fires every time the
+		// by mouseover, which does: the tab wraps the session icon and the delete button, so a bubbling trigger re-fires every time the
 		// pointer crosses between them and restarts the hover delay each time.
 		// fireEvent rather than user-event because the point is which single
 		// raw event reaches the tab.
 		it('ignores a mouseover bubbling up from inside the tab', () => {
-			const { tab } = renderTab('tooltip-session-3', 'My Python Session', true);
+			const { tab } = renderTab('tooltip-session-3', 'My Python Session', false);
 
 			// A move from the tab onto its own delete button. relatedTarget is
 			// what makes it that rather than an arrival from outside the
@@ -371,7 +448,7 @@ describe('ConsoleTab', () => {
 
 	describe('unread executions', () => {
 		/** Render a tab for a console that is not the active one. */
-		function renderInactiveTab(sessionId: string, sessionName: string, count: number, hideSessionName = false) {
+		function renderInactiveTab(sessionId: string, sessionName: string, count: number, compact = false) {
 			const instance = addActiveConsoleInstance(sessionId, sessionName);
 			instance.setUnreadExecutionCount(count);
 			// Adding another console makes it the active one, sending this one to the background.
@@ -379,12 +456,11 @@ describe('ConsoleTab', () => {
 			rtl.render(
 				<PositronConsoleContextProvider>
 					<ConsoleTab
-						hideSessionName={hideSessionName}
+						compact={compact}
 						hoverManager={hoverManager}
 						positronConsoleInstance={instance}
 						width={200}
 						onChangeSession={() => { }}
-						onSessionNameHiddenChange={() => { }}
 					/>
 				</PositronConsoleContextProvider>
 			);

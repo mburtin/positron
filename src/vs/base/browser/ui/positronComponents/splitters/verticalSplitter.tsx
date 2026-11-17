@@ -35,6 +35,7 @@ type VerticalSplitterBaseProps = | {
 	readonly showSash?: boolean;
 	readonly onBeginResize: () => VerticalSplitterResizeParams;
 	readonly onResize: (width: number) => void;
+	readonly onEndResize?: () => void;
 };
 
 /**
@@ -143,6 +144,7 @@ export const VerticalSplitter = ({
 	onCollapsedChanged,
 	onBeginResize,
 	onResize,
+	onEndResize,
 }: VerticalSplitterProps) => {
 	// Context hooks.
 	const services = usePositronReactServicesContext();
@@ -364,6 +366,7 @@ export const VerticalSplitter = ({
 		const lostPointerCaptureHandler = (e: PointerEvent) => {
 			// Handle the last possible move change.
 			pointerMoveHandler(e);
+			onEndResize?.();
 
 			// Remove our pointer event handlers.
 			sash.removeEventListener('pointermove', pointerMoveHandler);

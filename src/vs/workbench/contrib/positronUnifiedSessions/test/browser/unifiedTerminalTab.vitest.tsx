@@ -51,10 +51,11 @@ describe('UnifiedTerminalTab', () => {
 		primaryStatus = undefined;
 	});
 
-	function renderTab(active = false) {
+	function renderTab(active = false, compact = false) {
 		return rtl.render(
 			<UnifiedTerminalTab
 				active={active}
+				compact={compact}
 				instance={instance}
 				terminalService={terminalService}
 				onSelect={onSelect}
@@ -87,6 +88,17 @@ describe('UnifiedTerminalTab', () => {
 		primaryStatus = { id: 'bell', severity: Severity.Warning, icon: Codicon.bell };
 		act(() => primaryStatusChanged.fire(primaryStatus));
 		expect(screen.getByRole('tab')).toContainHTML('codicon-bell');
+	});
+
+	it('keeps only the terminal profile icon and a status dot in compact mode', () => {
+		primaryStatus = { id: 'bell', severity: Severity.Warning, icon: Codicon.bell, tooltip: 'Bell' };
+		renderTab(false, true);
+
+		const tab = screen.getByRole('tab', { name: 'zsh', description: 'Bell' });
+		expect(tab).toContainHTML('codicon-terminal');
+		expect(tab).toContainHTML('tab-status-dot');
+		expect(screen.queryByText('zsh')).not.toBeInTheDocument();
+		expect(screen.queryByRole('button')).not.toBeInTheDocument();
 	});
 
 	it('selects the terminal when clicked', async () => {

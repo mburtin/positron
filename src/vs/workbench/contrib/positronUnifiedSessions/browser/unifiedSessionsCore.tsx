@@ -9,10 +9,11 @@ import { useCallback, useEffect, useState } from 'react';
 // Other dependencies.
 import { IReactComponentContainer } from '../../../../base/browser/positronReactRenderer.js';
 import { usePositronReactServicesContext } from '../../../../base/browser/positronReactRendererContext.js';
-import { VerticalSplitter, VerticalSplitterResizeParams } from '../../../../base/browser/ui/positronComponents/splitters/verticalSplitter.js';
+import { VerticalSplitter } from '../../../../base/browser/ui/positronComponents/splitters/verticalSplitter.js';
 import { RuntimeStartupPhase } from '../../../services/languageRuntime/common/languageRuntimeService.js';
 import { ActionBar } from '../../positronConsole/browser/components/actionBar.js';
 import { ConsoleInstance } from '../../positronConsole/browser/components/consoleInstance.js';
+import { useConsoleTabListLayout } from '../../positronConsole/browser/components/consoleTabListLayout.js';
 import { EmptyConsole } from '../../positronConsole/browser/components/emptyConsole.js';
 import { StartupStatus } from '../../positronConsole/browser/components/startupStatus.js';
 import { usePositronConsoleContext } from '../../positronConsole/browser/positronConsoleContext.js';
@@ -20,7 +21,6 @@ import { ITerminalGroupService, ITerminalInstance, ITerminalService } from '../.
 import { IUnifiedSessionsState } from '../common/unifiedSessions.js';
 import { UnifiedSessionsTabList } from './unifiedSessionsTabList.js';
 import { UnifiedTerminalHost } from './unifiedTerminalHost.js';
-import { getTabListWidth, MINIMUM_PANE_WIDTH, MINIMUM_TAB_LIST_WIDTH } from './unifiedSessionsLayout.js';
 
 // Constants.
 const ACTION_BAR_HEIGHT = 28;
@@ -49,7 +49,6 @@ export const UnifiedSessionsCore = (props: UnifiedSessionsCoreProps) => {
 	// State hooks.
 	const [width, setWidth] = useState(() => props.reactComponentContainer.width);
 	const [height, setHeight] = useState(() => props.reactComponentContainer.height);
-	const [userTabListWidth, setUserTabListWidth] = useState<number | undefined>(undefined);
 	const [startupPhase, setStartupPhase] = useState(() => services.languageRuntimeService.startupPhase);
 	const [terminals, setTerminals] = useState<readonly ITerminalInstance[]>([]);
 	const [selectedTerminalId, setSelectedTerminalId] = useState(() => props.unifiedState.selectedTerminalId);
@@ -104,6 +103,8 @@ export const UnifiedSessionsCore = (props: UnifiedSessionsCoreProps) => {
 		props.unifiedState.selectTerminal(undefined);
 	}, [props.unifiedState]);
 
+	const { paneWidth, tabListWidth, compact, splitterProps } = useConsoleTabListLayout(width, true);
+
 	// Nothing to show: fall back to what the Console shows when it is empty.
 	if (positronConsoleContext.positronConsoleInstances.length === 0 && terminals.length === 0) {
 		return (
@@ -112,15 +113,6 @@ export const UnifiedSessionsCore = (props: UnifiedSessionsCoreProps) => {
 			</div>
 		);
 	}
-
-	// Compute the layout.
-	const tabListWidth = getTabListWidth(width, userTabListWidth);
-	const paneWidth = width - tabListWidth;
-	const handleBeginResize = (): VerticalSplitterResizeParams => ({
-		minimumWidth: MINIMUM_PANE_WIDTH,
-		maximumWidth: width - MINIMUM_TAB_LIST_WIDTH,
-		startingWidth: paneWidth,
-	});
 
 	// Render.
 	return (
@@ -152,21 +144,23 @@ export const UnifiedSessionsCore = (props: UnifiedSessionsCoreProps) => {
 						/>
 					}
 				</div>
-				<VerticalSplitter
-					onBeginResize={handleBeginResize}
-					onResize={newPaneWidth => setUserTabListWidth(width - newPaneWidth)}
-				/>
-				<UnifiedSessionsTabList
-					height={height}
-					selectedTerminal={selectedTerminal}
-					terminalGroupService={props.terminalGroupService}
-					terminalService={props.terminalService}
-					terminals={terminals}
-					unifiedState={props.unifiedState}
-					width={tabListWidth}
-					onSelectConsole={handleSelectConsole}
-					onSelectTerminal={handleSelectTerminal}
-				/>
+				{tabListWidth > 0 &&
+					<>
+						<VerticalSplitter {...splitterProps} />
+						<UnifiedSessionsTabList
+							compact={compact}
+							height={height}
+							selectedTerminal={selectedTerminal}
+							terminalGroupService={props.terminalGroupService}
+							terminalService={props.terminalService}
+							terminals={terminals}
+							unifiedState={props.unifiedState}
+							width={tabListWidth}
+							onSelectConsole={handleSelectConsole}
+							onSelectTerminal={handleSelectTerminal}
+						/>
+					</>
+				}
 			</div>
 		</div>
 	);

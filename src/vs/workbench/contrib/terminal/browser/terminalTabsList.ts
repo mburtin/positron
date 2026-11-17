@@ -368,23 +368,23 @@ class TerminalTabsRenderer implements IListRenderer<ITerminalInstance, ITerminal
 		const editableData = this._terminalEditingService.getEditableData(instance);
 
 		const iconId = this._instantiationService.invokeFunction(getIconId, instance);
-		let label: string = '';
+		let label = prefix;
 		if (!hasText) {
-			const primaryStatus = instance.statusList.primary;
-			// Don't show ignore severity
-			if (primaryStatus && primaryStatus.severity > Severity.Ignore) {
-				label = `${prefix}$(${primaryStatus.icon?.id || iconId})`;
-			} else {
-				label = `${prefix}$(${iconId})`;
-			}
+			label += `$(${iconId})`;
 		} else {
 			this.fillActionBar(instance, template);
-			label = prefix;
-			// Only add the title if the icon is set, this prevents the title jumping around for
-			// example when launching with a ShellLaunchConfig.name and no icon
+			// Only add the title if the icon is set, this prevents the title jumping around
+			// when launching with a ShellLaunchConfig.name and no icon.
 			if (instance.icon) {
 				label += editableData ? `$(${iconId})` : `$(${iconId}) ${instance.title}`;
 			}
+		}
+
+		const primaryStatus = instance.statusList.primary;
+		if (!hasText && !editableData && primaryStatus && primaryStatus.severity > Severity.Ignore) {
+			template.element.dataset.compactStatus = Severity.toString(primaryStatus.severity);
+		} else {
+			delete template.element.dataset.compactStatus;
 		}
 
 		if (!hasActionBar) {
@@ -546,7 +546,9 @@ class TerminalTabsAccessibilityProvider implements IListAccessibilityProvider<IT
 				]
 			}, "Terminal {0} {1}", instance.instanceId, instance.title);
 		}
-		return ariaLabel;
+		const status = instance.statusList.primary;
+		return status?.tooltip && status.severity > Severity.Ignore ?
+			localize('terminalAriaLabelWithStatus', "{0}, {1}", ariaLabel, status.tooltip) : ariaLabel;
 	}
 }
 

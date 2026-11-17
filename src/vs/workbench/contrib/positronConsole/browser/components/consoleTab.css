@@ -38,6 +38,56 @@
 	position: relative;
 }
 
+.tab-button .session-icons {
+	display: flex;
+	align-items: center;
+	padding-inline-end: var(--vscode-spacing-size40);
+	position: relative;
+	flex-shrink: 0;
+}
+
+.tab-button .tab-status-dot {
+	position: absolute;
+	inset-block-start: var(--vscode-spacing-size20);
+	inset-inline-end: 0;
+	width: var(--vscode-spacing-size60);
+	height: var(--vscode-spacing-size60);
+	border-radius: var(--vscode-cornerRadius-circle);
+	background-color: currentColor;
+	outline: 1px solid var(--vscode-contrastBorder, transparent);
+}
+
+.tab-button--compact {
+	padding: var(--vscode-spacing-size40) 0;
+}
+
+.tab-button--compact .tab-header {
+	height: var(--vscode-spacing-size240);
+	justify-content: center;
+}
+
+.tab-button--compact .session-icons {
+	width: var(--vscode-spacing-size240);
+	height: 100%;
+	padding-inline-end: 0;
+	justify-content: center;
+}
+
+.monaco-enable-motion .tab-button .session-icons > :is(.runtime-session-icon, .codicon) {
+	transition: transform 100ms ease-out;
+}
+
+/* Scale both image and font-based icons without overriding the file icon theme. */
+.tab-button--compact .session-icons > :is(.runtime-session-icon, .codicon) {
+	transform: scale(1.5);
+}
+
+.tab-button--compact .tab-status-dot {
+	inset-block-start: 0;
+	inset-inline-end: calc(-1 * var(--vscode-spacing-size20));
+	z-index: 1;
+}
+
 .tab-button:hover {
 	background-color: var(--vscode-list-hoverBackground);
 }
@@ -101,14 +151,18 @@
 	right: 0;
 
 	/*
-	 * 40px is the room the icons take up: two 16px icons, the gap between them,
-	 * and the gap that follows them.
+	 * 24px covers the runtime icon, its dot, and the gap before the input.
 	 */
-	width: calc(100% - 40px);
+	width: calc(100% - 24px);
 	min-width: 40px;
 
 	/* Keep the border and padding inside the space the tab allots the input */
 	box-sizing: border-box;
+}
+
+.tab-button--compact .session-name-input {
+	width: 100%;
+	min-width: 0;
 }
 
 .tab-button .session-name-input:focus {
@@ -221,20 +275,5 @@
 @container (max-width: 115px) {
 	.resource-usage-stats .resource-usage-label {
 		display: none;
-	}
-}
-
-/*
- * Hide CPU usage when it's even narrower (at its minimum width).
- *
- * The 60px value corresponds to the MINIMUM_CONSOLE_TAB_LIST_WIDTH, and should be
- * kept in sync with that constant.
- */
-@container (max-width: 60px) {
-	.tab-button .resource-usage-stats .resource-usage-cpu {
-		display: none;
-	}
-	.tab-button .resource-usage-stats {
-		justify-content: flex-end;
 	}
 }

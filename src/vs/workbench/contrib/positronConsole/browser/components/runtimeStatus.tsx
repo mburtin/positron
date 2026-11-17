@@ -46,6 +46,12 @@ const statusToIconColor: Record<RuntimeStatus, ColorIdentifier> = {
 	[RuntimeStatus.Idle]: POSITRON_RUNTIME_STATE_ICON_IDLE,
 };
 
+const statusLabels: Record<RuntimeStatus, string> = {
+	[RuntimeStatus.Active]: localize('positronRuntimeStatusActive', "Interpreter active"),
+	[RuntimeStatus.Disconnected]: localize('positronRuntimeStatusDisconnected', "Interpreter disconnected"),
+	[RuntimeStatus.Idle]: localize('positronRuntimeStatusIdle', "Interpreter ready"),
+};
+
 export interface RuntimeStatusIconProps {
 	status: RuntimeStatus;
 }
@@ -61,3 +67,14 @@ export const RuntimeStatusIcon = ({ status }: RuntimeStatusIconProps) => {
 		style={{ color }}
 	/>;
 };
+
+/** Shows the session status as a dot, with a description for its tab. */
+export const RuntimeStatusDot = ({ status, descriptionId }: RuntimeStatusIconProps & { readonly descriptionId: string }) => (
+	<span
+		className='tab-status-dot'
+		data-testid={`runtime-status-${status.toLowerCase()}`}
+		style={{ color: asCssVariable(statusToIconColor[status]) }}
+	>
+		<span hidden id={descriptionId}>{statusLabels[status]}</span>
+	</span>
+);

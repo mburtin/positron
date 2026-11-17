@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 // React.
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 // Other dependencies.
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
@@ -25,6 +25,7 @@ import { ENTRY_KEY_ATTRIBUTE, useUnifiedTabReorder } from './useUnifiedTabReorde
  * UnifiedSessionsTabListProps interface.
  */
 interface UnifiedSessionsTabListProps {
+	readonly compact: boolean;
 	readonly width: number;
 	readonly height: number;
 	readonly terminals: readonly ITerminalInstance[];
@@ -67,23 +68,6 @@ export const UnifiedSessionsTabList = (props: UnifiedSessionsTabListProps) => {
 		)));
 		return () => disposableStore.dispose();
 	}, [services.configurationService, services.hoverService]);
-
-	// The console tabs hide their names all at once when one of them runs out of room.
-	const [sessionsWithHiddenName, setSessionsWithHiddenName] = useState<ReadonlySet<string>>(() => new Set());
-	const handleSessionNameHiddenChange = useCallback((sessionId: string, hidden: boolean) => {
-		setSessionsWithHiddenName(current => {
-			if (current.has(sessionId) === hidden) {
-				return current;
-			}
-			const updated = new Set(current);
-			if (hidden) {
-				updated.add(sessionId);
-			} else {
-				updated.delete(sessionId);
-			}
-			return updated;
-		});
-	}, []);
 
 	// The order the user dragged the entries into.
 	const [order, setOrder] = useState(() => props.unifiedState.order);
@@ -250,15 +234,15 @@ export const UnifiedSessionsTabList = (props: UnifiedSessionsTabListProps) => {
 						>
 							{entry.kind === 'console' ?
 								<ConsoleTab
-									hideSessionName={sessionsWithHiddenName.size > 0}
+									compact={props.compact}
 									hoverManager={hoverManager}
 									positronConsoleInstance={entry.console}
 									width={props.width}
 									onChangeSession={() => handleSelectConsole(entry.console.sessionId)}
-									onSessionNameHiddenChange={handleSessionNameHiddenChange}
 								/> :
 								<UnifiedTerminalTab
 									active={entry.terminal === props.selectedTerminal}
+									compact={props.compact}
 									instance={entry.terminal}
 									terminalService={props.terminalService}
 									onSelect={props.onSelectTerminal}

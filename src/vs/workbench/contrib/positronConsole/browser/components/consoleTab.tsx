@@ -7,19 +7,20 @@
 import './consoleTab.css';
 
 // React.
-import React, { KeyboardEvent, MouseEvent, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { KeyboardEvent, MouseEvent, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 
 // Other dependencies.
 import { localize } from '../../../../../nls.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { useObservedValue } from '../../../../../base/browser/useObservedValue.js';
-import { IHoverManager } from '../../../../../platform/hover/browser/hoverManager.js';
 import { IConfigurationChangeEvent } from '../../../../../platform/configuration/common/configuration.js';
+import { IHoverManager } from '../../../../../platform/hover/browser/hoverManager.js';
 import { ConsoleSessionStatusIcon } from './consoleSessionStatusIcon.js';
 import { usePositronConsoleContext } from '../positronConsoleContext.js';
 import { IPositronConsoleInstance, PositronConsoleState } from '../../../../services/positronConsole/browser/interfaces/positronConsoleService.js';
 import { IAction } from '../../../../../base/common/actions.js';
 import { AnchorAlignment, AnchorAxisAlignment } from '../../../../../base/browser/ui/contextview/contextview.js';
+import { positronClassNames } from '../../../../../base/common/positronUtilities.js';
 import { isMacintosh } from '../../../../../base/common/platform.js';
 import { usePositronReactServicesContext } from '../../../../../base/browser/positronReactRendererContext.js';
 import { LanguageRuntimeSessionMode } from '../../../../services/languageRuntime/common/languageRuntimeService.js';
@@ -71,13 +72,12 @@ function getUnreadExecutionsAriaLabel(sessionName: string, count: number): strin
 interface ConsoleTabProps {
 	readonly positronConsoleInstance: IPositronConsoleInstance;
 	readonly width: number; // The width of the console tab list.
-	readonly hideSessionName: boolean; // Set when any tab has no room for its name.
+	readonly compact: boolean;
 	readonly hoverManager: IHoverManager | undefined; // Shared by every tab in the list.
-	readonly onSessionNameHiddenChange: (sessionId: string, hidden: boolean) => void;
 	readonly onChangeSession: (instance: IPositronConsoleInstance) => void;
 }
 
-export const ConsoleTab = ({ positronConsoleInstance, width, hideSessionName, hoverManager, onSessionNameHiddenChange, onChangeSession }: ConsoleTabProps) => {
+export const ConsoleTab = ({ positronConsoleInstance, width, compact, hoverManager, onChangeSession }: ConsoleTabProps) => {
 
 	// Context
 	const services = usePositronReactServicesContext();
@@ -104,6 +104,7 @@ export const ConsoleTab = ({ positronConsoleInstance, width, hideSessionName, ho
 
 	// Refs
 	const tabRef = useRef<HTMLDivElement>(null);
+	const statusDescriptionId = useId();
 	const inputRef = React.useRef<HTMLInputElement>(null);
 	const sessionNameRef = useRef<HTMLParagraphElement>(null);
 
@@ -176,7 +177,7 @@ export const ConsoleTab = ({ positronConsoleInstance, width, hideSessionName, ho
 	// paints.
 	useLayoutEffect(() => {
 		const sessionNameElement = sessionNameRef.current;
-		if (!sessionNameElement) {
+		if (compact || !sessionNameElement) {
 			return;
 		}
 
@@ -199,20 +200,10 @@ export const ConsoleTab = ({ positronConsoleInstance, width, hideSessionName, ho
 				return measureElement.getBoundingClientRect().width;
 			});
 			setFittedSessionName(fittedName);
-
-			// Report a name with no room left, so that the tab list can hide the
-			// names on the other tabs too rather than showing a ragged mix of
-			// named and unnamed tabs.
-			onSessionNameHiddenChange(positronConsoleInstance.sessionId, fittedName.length === 0);
 		} finally {
 			measureElement.remove();
 		}
-	}, [width, sessionName, isRenamingSession, hasUnreadExecutions, onSessionNameHiddenChange, positronConsoleInstance.sessionId]);
-
-	// Stop counting this tab's name once the tab goes away.
-	useEffect(() => {
-		return () => onSessionNameHiddenChange(positronConsoleInstance.sessionId, false);
-	}, [onSessionNameHiddenChange, positronConsoleInstance.sessionId]);
+	}, [compact, width, sessionName, isRenamingSession, hasUnreadExecutions]);
 
 	// Show the full session name on hover, but only while the tab is showing
 	// less than all of it. A tooltip repeating a name that's already fully
@@ -225,7 +216,7 @@ export const ConsoleTab = ({ positronConsoleInstance, width, hideSessionName, ho
 	//
 	// Unread executions always get a tooltip, since the dot alone doesn't
 	// say how many there were; it names the session only if the tab can't.
-	const nameIsCutShort = hideSessionName || fittedSessionName !== sessionName;
+	const nameIsCutShort = compact || fittedSessionName !== sessionName;
 	const tooltip = isRenamingSession ? undefined :
 		hasUnreadExecutions ? getUnreadExecutionsTooltip(nameIsCutShort ? sessionName : undefined, unreadExecutionCount) :
 			nameIsCutShort ? sessionName : undefined;
@@ -275,25 +266,20 @@ export const ConsoleTab = ({ positronConsoleInstance, width, hideSessionName, ho
 	 * The mouse down handler for the parent element of the console tab
 	 * instance.  This handler is used to show the context menu when the user
 	 * right-clicks on a tab.
-	 *
-	 * Notebook consoles can't be renamed, so we currently do not show a context
-	 * menu for them.
 	 */
-	const handleMouseDown = positronConsoleInstance.sessionMetadata.sessionMode ===
-		LanguageRuntimeSessionMode.Notebook ? undefined :
-		(e: MouseEvent<HTMLDivElement>) => {
-			// Prevent the default action and stop the event from propagating.
-			e.preventDefault();
-			e.stopPropagation();
+	const handleMouseDown = (e: MouseEvent<HTMLDivElement>) => {
+		// Prevent the default action and stop the event from propagating.
+		e.preventDefault();
+		e.stopPropagation();
 
-			// Show the context menu when the user right-clicks on a tab or
-			// when the user executes ctrl + left-click on macOS
-			if ((e.button === 0 && isMacintosh && e.ctrlKey) || e.button === 2) {
-				// Get the hover out of the way of the menu.
-				hoverManager?.hideHover();
-				showContextMenu(e.clientX, e.clientY);
-			}
-		};
+		// Show the context menu when the user right-clicks on a tab or
+		// when the user executes ctrl + left-click on macOS
+		if ((e.button === 0 && isMacintosh && e.ctrlKey) || e.button === 2) {
+			// Get the hover out of the way of the menu.
+			hoverManager?.hideHover();
+			showContextMenu(e.clientX, e.clientY);
+		}
+	};
 
 	/**
 	 * Tracks whether the pointer is over the tab, which drives the hover. React's
@@ -316,15 +302,16 @@ export const ConsoleTab = ({ positronConsoleInstance, width, hideSessionName, ho
 		// The actions that are built below.
 		const actions: IAction[] = [];
 
-		// Add the rename action
-		actions.push({
-			id: 'workbench.action.positronConsole.renameConsoleSession',
-			label: localize('positron.console.renameInstance', "Rename..."),
-			tooltip: '',
-			class: undefined,
-			enabled: true,
-			run: () => showRenameInputField()
-		});
+		if (positronConsoleInstance.sessionMetadata.sessionMode !== LanguageRuntimeSessionMode.Notebook) {
+			actions.push({
+				id: 'workbench.action.positronConsole.renameConsoleSession',
+				label: localize('positron.console.renameInstance', "Rename..."),
+				tooltip: '',
+				class: undefined,
+				enabled: true,
+				run: () => showRenameInputField()
+			});
+		}
 
 		// Add the delete action
 		actions.push({
@@ -362,32 +349,35 @@ export const ConsoleTab = ({ positronConsoleInstance, width, hideSessionName, ho
 	};
 
 	/**
-	 * Shows the rename console session prompt in the UI.
+	 * Opens a full-width prompt when the compact tab has very little room to edit.
 	 */
 	const showRenameInputField = async () => {
-		// Show a prompt to rename the console session in the UI
-		setIsRenamingSession(true);
+		if (compact) {
+			const name = await services.quickInputService.input({
+				prompt: localize('positron.console.tab.renamePrompt', "Enter a New Session Name"),
+				value: sessionName,
+			});
+			if (name !== undefined) {
+				commitSessionName(name);
+			}
+		} else {
+			setIsRenamingSession(true);
+		}
 	};
 
 	/**
-	 * Submits the new session name on Enter or blur.
+	 * Persists a rename from either the inline editor or the compact prompt.
 	 */
-	const handleRenameSubmit = async () => {
-		// Validate the new session name
-		const newName = sessionName.trim();
-		if (newName.length === 0 || newName === positronConsoleInstance.sessionName) {
-			// Hide the input field
-			setIsRenamingSession(false);
-			// Restore the original session name
-			setSessionName(positronConsoleInstance.sessionName);
+	const commitSessionName = (name: string) => {
+		const newName = name.trim();
+		const originalName = positronConsoleInstance.sessionName;
+		if (!newName || newName === originalName) {
+			setSessionName(originalName);
 			return;
 		}
 
 		try {
-			services.runtimeSessionService.updateSessionName(
-				positronConsoleInstance.sessionId,
-				newName
-			);
+			services.runtimeSessionService.updateSessionName(positronConsoleInstance.sessionId, newName);
 			setSessionName(newName);
 		} catch (error) {
 			services.notificationService.error(
@@ -397,11 +387,13 @@ export const ConsoleTab = ({ positronConsoleInstance, width, hideSessionName, ho
 					error
 				)
 			);
-			setSessionName(positronConsoleInstance.sessionName);
-		} finally {
-			// Hide the input field
-			setIsRenamingSession(false);
+			setSessionName(originalName);
 		}
+	};
+
+	const handleRenameSubmit = () => {
+		commitSessionName(sessionName);
+		setIsRenamingSession(false);
 	};
 
 	/**
@@ -556,6 +548,7 @@ export const ConsoleTab = ({ positronConsoleInstance, width, hideSessionName, ho
 		<div
 			ref={tabRef}
 			aria-controls={`console-panel-${positronConsoleInstance.sessionMetadata.sessionId}`}
+			aria-describedby={statusDescriptionId}
 			// The displayed name rather than the raw one off the instance: for a
 			// notebook session those differ (the tab shows the notebook's
 			// filename), and the accessible name should be what the tab reads
@@ -567,25 +560,40 @@ export const ConsoleTab = ({ positronConsoleInstance, width, hideSessionName, ho
 			aria-label={hasUnreadExecutions ?
 				getUnreadExecutionsAriaLabel(sessionName, unreadExecutionCount) :
 				sessionName}
-			aria-selected={positronConsoleContext.activePositronConsoleInstance?.sessionMetadata.sessionId === positronConsoleInstance.sessionId}
-			className={`tab-button ${positronConsoleContext.activePositronConsoleInstance?.sessionMetadata.sessionId === positronConsoleInstance.sessionId && 'tab-button--active'}`}
+			aria-selected={isActiveTab}
+			className={positronClassNames('tab-button', { 'tab-button--active': isActiveTab, 'tab-button--compact': compact })}
 			data-testid={`console-tab-${positronConsoleInstance.sessionMetadata.sessionId}`}
 			role='tab'
 			tabIndex={isActiveTab ? 0 : -1}
 			onClick={handleClick}
+			onKeyDown={e => {
+				if (e.target === e.currentTarget &&
+					(e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10'))) {
+					e.preventDefault();
+					e.stopPropagation();
+					const { left, bottom } = e.currentTarget.getBoundingClientRect();
+					hoverManager?.hideHover();
+					showContextMenu(left, bottom);
+				}
+			}}
 			onMouseDown={handleMouseDown}
 			onMouseEnter={handleMouseEnter}
 			onMouseLeave={handleMouseLeave}
 		>
 			{/* Header row with session info */}
 			<div className='tab-header show-file-icons'>
-				<ConsoleSessionStatusIcon positronConsoleInstance={positronConsoleInstance} />
-				<RuntimeIcon
-					languageId={positronConsoleInstance.runtimeMetadata.languageId}
-					notebookUri={positronConsoleInstance.sessionMetadata.notebookUri}
-					owner={positronConsoleInstance.sessionMetadata.owner}
-					sessionMode={positronConsoleInstance.sessionMetadata.sessionMode}
-				/>
+				<div className='session-icons'>
+					<ConsoleSessionStatusIcon
+						descriptionId={statusDescriptionId}
+						positronConsoleInstance={positronConsoleInstance}
+					/>
+					<RuntimeIcon
+						languageId={positronConsoleInstance.runtimeMetadata.languageId}
+						notebookUri={positronConsoleInstance.sessionMetadata.notebookUri}
+						owner={positronConsoleInstance.sessionMetadata.owner}
+						sessionMode={positronConsoleInstance.sessionMetadata.sessionMode}
+					/>
+				</div>
 				{isRenamingSession ? (
 					<input
 						ref={inputRef}
@@ -598,9 +606,9 @@ export const ConsoleTab = ({ positronConsoleInstance, width, hideSessionName, ho
 						onKeyDown={handleInputKeyDown}
 						onMouseDown={e => e.stopPropagation()} // Allows text selection in the input field
 					/>
-				) : (
+				) : !compact && (
 					<>
-						<p ref={sessionNameRef} className='session-name'>{hideSessionName ? '' : fittedSessionName}</p>
+						<p ref={sessionNameRef} className='session-name'>{fittedSessionName}</p>
 						{/* Marks executions that ran while the tab was not being looked at; the delete button replaces it on hover */
 							width > MINIMUM_ACTION_CONSOLE_TAB_WIDTH && hasUnreadExecutions &&
 							<span className='unread-executions' data-testid='unread-executions' />
@@ -624,7 +632,7 @@ export const ConsoleTab = ({ positronConsoleInstance, width, hideSessionName, ho
 			</div>
 
 			{/* Resource usage section */}
-			{isActiveTab && // Only show resource usage for the active tab
+			{!compact && isActiveTab && // Only show resource usage for the active detailed tab
 				showResourceMonitor && // Only show resource usage if enabled in settings
 				resourceUsageHistory.length > 0 && // Only show resource usage if we have data
 				consoleState !== PositronConsoleState.Exited && // Only show resource usage if the console is not exited
