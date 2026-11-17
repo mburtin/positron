@@ -1,0 +1,112 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (C) 2026 Posit Software, PBC. All rights reserved.
+ *  Licensed under the Elastic License 2.0. See LICENSE.txt for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+.positron-unified-sessions-container {
+	display: flex;
+	flex-direction: column;
+}
+
+/*
+ * The terminal host covers the console pane while a terminal is selected. The
+ * terminal's own styles apply to `.pane-body.integrated-terminal` and set its
+ * position, so this selector has to be more specific than theirs.
+ */
+.positron-unified-sessions .console-pane {
+	position: relative;
+}
+
+.monaco-workbench .positron-unified-sessions .unified-terminal-host.pane-body.integrated-terminal {
+	position: absolute;
+	inset: 0;
+	z-index: 1;
+}
+
+.monaco-workbench .positron-unified-sessions .unified-terminal-host .terminal-outer-container {
+	width: 100%;
+	height: 100%;
+}
+
+/* The tab list. */
+.positron-unified-sessions .unified-sessions-tab-list {
+	display: flex;
+	flex-direction: column;
+	background-color: var(--vscode-tab-inactiveBackground);
+}
+
+/*
+ * While a terminal is selected, the active console session's tab is no
+ * longer the selected one, so it takes the inactive look.
+ */
+.positron-unified-sessions .terminal-selected .tab-button--active:not(.unified-terminal-tab) {
+	background-color: inherit;
+	border-left-color: transparent;
+	outline: none;
+}
+
+.positron-unified-sessions .terminal-selected .tab-button--active:not(.unified-terminal-tab):hover {
+	background-color: var(--vscode-list-hoverBackground);
+}
+
+/*
+ * The entries of the tab list. Each one holds a tab and can be dragged to
+ * reorder the list.
+ */
+.positron-unified-sessions .unified-tab-entry {
+	position: relative;
+}
+
+.positron-unified-sessions .unified-sessions-tab-list .tab-button {
+	user-select: none;
+}
+
+.positron-unified-sessions .unified-tab-entry--dragging {
+	opacity: 0.5;
+}
+
+/* Where the dragged entry would land. */
+.positron-unified-sessions .unified-tab-entry--drop-before::after,
+.positron-unified-sessions .unified-tab-entry--drop-after::after {
+	content: '';
+	position: absolute;
+	left: 0;
+	right: 0;
+	height: 2px;
+	background-color: var(--vscode-focusBorder);
+	pointer-events: none;
+	z-index: 1;
+}
+
+.positron-unified-sessions .unified-tab-entry--drop-before::after {
+	top: 0;
+}
+
+.positron-unified-sessions .unified-tab-entry--drop-after::after {
+	bottom: 0;
+}
+
+/* The terminal tab's buttons show on hover, as the console tab's delete button does. */
+.positron-unified-sessions .unified-terminal-tab .split-button {
+	display: none;
+	background-color: transparent;
+	border: none;
+	border-radius: 5px;
+	color: inherit;
+	cursor: pointer;
+	height: 22px;
+	padding: 2px;
+}
+
+.positron-unified-sessions .unified-terminal-tab:hover .split-button,
+.positron-unified-sessions .unified-terminal-tab:focus-within .split-button {
+	display: unset;
+}
+
+.positron-unified-sessions .unified-terminal-tab .split-button:hover {
+	background-color: var(--vscode-toolbar-hoverBackground);
+}
+
+.positron-unified-sessions .unified-terminal-tab .split-button:focus {
+	outline: 1px solid var(--vscode-focusBorder);
+}

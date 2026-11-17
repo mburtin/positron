@@ -299,6 +299,10 @@
 			"project": "vscode-workbench"
 		},
 		{
+			"name": "vs/workbench/contrib/positronUnifiedSessions",
+			"project": "vscode-workbench"
+		},
+		{
 			"name": "vs/workbench/contrib/positronQuarto",
 			"project": "vscode-workbench"
 		},

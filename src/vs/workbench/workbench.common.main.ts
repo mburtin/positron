@@ -527,6 +527,7 @@ import './contrib/positronAiFeatures/browser/positronAiFeatures.contribution.js'
 import './contrib/positronAssistant/browser/positronAssistant.contribution.js';
 import './contrib/positronConsole/browser/positronConsole.contribution.js';
 import './contrib/positronConsole/browser/positronConsoleView.js';
+import './contrib/positronUnifiedSessions/browser/unifiedSessions.contribution.js';
 import './contrib/positronDataExplorerEditor/browser/positronDataExplorerEditor.contribution.js';
 import './contrib/positronDataExplorerEditor/browser/positronDataExplorerEditor.js';
 import './contrib/positronObjectExplorerEditor/browser/positronObjectExplorerEditor.contribution.js';

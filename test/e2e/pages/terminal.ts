@@ -8,7 +8,8 @@ import { Code } from '../infra/code';
 import { QuickAccess } from './quickaccess';
 import { escapeRegExp } from '../utils/strings';
 
-const TERMINAL_WRAPPER = '#terminal .terminal-wrapper.active';
+// The terminal is in the Terminal view, or in the unified Console view (`console.unifiedTabs`).
+const TERMINAL_WRAPPER = '#terminal .terminal-wrapper.active, .unified-terminal-host .terminal-wrapper.active';
 
 export class Terminal {
 	terminalTab: Locator;
@@ -22,6 +23,11 @@ export class Terminal {
 	}
 
 	async clickTerminalTab() {
+		// With `console.unifiedTabs` there is no Terminal tab: terminals are tabs of the Console view.
+		if (await this.terminalTab.count() === 0) {
+			await this.code.driver.currentPage.getByTestId(/^terminal-tab-/).last().click();
+			return;
+		}
 		await this.terminalTab.click();
 	}
 
