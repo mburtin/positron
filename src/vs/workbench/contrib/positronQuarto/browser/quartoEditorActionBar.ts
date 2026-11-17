@@ -216,3 +216,30 @@ MenuRegistry.appendMenuItem(MenuId.PositronQuartoPreviewMenu, {
 	group: '1_formats',
 	order: 10,
 });
+
+// --- Visual editor button ---------------------------------------------------
+//
+// A visible button, just right of Preview, that reopens the document in the
+// Quarto visual editor. It delegates to the Quarto extension's
+// `quarto.editInVisualMode` command, which the extension otherwise only surfaces
+// in the editor's overflow menu and context menu. Like the extension, it is
+// offered for saved .qmd documents only (the visual editor does not support
+// untitled files or R Markdown). The button has no icon, so `displayTitle` is
+// required for the action bar to render its text label (a plain command button
+// without an icon or `displayTitle` renders as an empty, invisible button).
+MenuRegistry.appendMenuItem(MenuId.EditorActionsLeft, {
+	command: {
+		id: 'quarto.editInVisualMode',
+		title: localize2('quarto.editorActionBar.visualEditor', "Visual Editor"),
+		positronActionBarOptions: {
+			controlType: 'button',
+			displayTitle: true,
+		},
+	},
+	group: 'navigation',
+	order: 2,
+	when: ContextKeyExpr.and(
+		ContextKeyExpr.equals(ResourceContextKey.LangId.key, 'quarto'),
+		ContextKeyExpr.notEquals(ResourceContextKey.Scheme.key, 'untitled'),
+	),
+});
