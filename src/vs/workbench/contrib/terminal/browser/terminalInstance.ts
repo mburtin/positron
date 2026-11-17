@@ -913,7 +913,13 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 			}
 			xterm.raw.options.windowsPty = processTraits.windowsPty;
 			// Enable reflow cursor to avoid prompt loss: https://github.com/microsoft/vscode/issues/274372
-			xterm.raw.options.reflowCursorLine = processTraits?.windowsPty?.backend === 'conpty' && !!this._terminalConfigurationService.config.windowsUseConptyDll;
+			// --- Start Positron ---
+			// Also reflow the cursor line for Unix ptys. Without it, zsh redraws its prompt on
+			// SIGWINCH against a layout xterm did not reflow, so narrowing the terminal below the
+			// prompt + input width and widening it again leaves duplicated or erased prompt lines.
+			// xterm.raw.options.reflowCursorLine = processTraits?.windowsPty?.backend === 'conpty' && !!this._terminalConfigurationService.config.windowsUseConptyDll;
+			xterm.raw.options.reflowCursorLine = !processTraits?.windowsPty || (processTraits.windowsPty.backend === 'conpty' && !!this._terminalConfigurationService.config.windowsUseConptyDll);
+			// --- End Positron ---
 		}));
 		this._register(this._processManager.onRestoreCommands(e => this.xterm?.shellIntegration.deserialize(e)));
 
