@@ -46,6 +46,9 @@ import { IAccessibilityService } from '../../../../platform/accessibility/common
 import { BugIndicatingError } from '../../../../base/common/errors.js';
 import type { MaybePromise } from '../../../../base/common/async.js';
 import { isString } from '../../../../base/common/types.js';
+// --- Start Positron ---
+import { applyStandardPromptEnvironment, STANDARD_PROMPT_SETTING_KEY } from '../common/positronTerminalConfiguration.js';
+// --- End Positron ---
 
 const enum ProcessConstants {
 	/**
@@ -472,6 +475,11 @@ export class TerminalProcessManager extends Disposable implements ITerminalProce
 			this._logService.debug(`Profile environment resolved with ${Object.keys(baseEnv).length} variables`);
 		}
 		const env = await terminalEnvironment.createTerminalEnvironment(shellLaunchConfig, envFromConfigValue, variableResolver, this._productService.version, this._terminalConfigurationService.config.detectLocale, baseEnv);
+		// --- Start Positron ---
+		// Tell the shell integration scripts whether to replace the user's prompt customizations
+		// with a standard prompt
+		applyStandardPromptEnvironment(env, this._configurationService.getValue<boolean>(STANDARD_PROMPT_SETTING_KEY) === true);
+		// --- End Positron ---
 		this._logService.debug(`Terminal environment created with ${Object.keys(env).length} variables: ${Object.keys(env).sort().join(', ')}`);
 		this._environmentVariableCollectionListener.clear();
 		if (!this._isDisposed && shouldUseEnvironmentVariableCollection(shellLaunchConfig)) {

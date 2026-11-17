@@ -47,6 +47,9 @@ import { TerminalProfileService } from './terminalProfileService.js';
 import { TerminalService } from './terminalService.js';
 import { TerminalViewPane } from './terminalView.js';
 import { AgentHostTerminalService, IAgentHostTerminalService } from './agentHostTerminalService.js';
+// --- Start Positron ---
+import { registerPositronTerminalConfiguration } from '../common/positronTerminalConfiguration.js';
+// --- End Positron ---
 
 // Register services
 registerSingleton(ITerminalLogService, TerminalLogService, InstantiationType.Delayed);
@@ -67,6 +70,10 @@ registerWorkbenchContribution2(RemoteTerminalBackendContribution.ID, RemoteTermi
 // Register configurations
 registerTerminalPlatformConfiguration();
 registerTerminalConfiguration(getFontSnippets);
+// --- Start Positron ---
+// Register Positron-specific terminal settings (standard prompt)
+registerPositronTerminalConfiguration();
+// --- End Positron ---
 
 // Register editor/dnd contributions
 Registry.as<IEditorFactoryRegistry>(EditorExtensions.EditorFactory).registerEditorSerializer(TerminalEditorInput.ID, TerminalInputSerializer);

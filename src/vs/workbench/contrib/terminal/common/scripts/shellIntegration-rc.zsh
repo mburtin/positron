@@ -14,6 +14,19 @@ fi
 # as disable it by unsetting the variable.
 VSCODE_SHELL_INTEGRATION=1
 
+# --- Start Positron ---
+# When terminal.integrated.standardPrompt is enabled, the user's prompt customizations (oh-my-zsh
+# themes, powerlevel10k, starship, oh-my-posh, a custom PROMPT, ...) are replaced with a standard
+# prompt after ~/.zshrc has run, and the prompt is reasserted before each prompt is drawn.
+if [[ "${POSITRON_STANDARD_PROMPT:-}" == "1" ]]; then
+	__positron_standard_prompt='%n@%m %1~ %# '
+	# Frameworks that draw their prompt before ~/.zshrc completes would flash it on startup
+	# (powerlevel10k's instant prompt checks this variable and stays off)
+	typeset -gi __p9k_instant_prompt_disabled=1
+fi
+builtin unset POSITRON_STANDARD_PROMPT
+# --- End Positron ---
+
 # By default, zsh will set the $HISTFILE to the $ZDOTDIR location automatically. In the case of the
 # shell integration being injected, this means that the terminal will use a different history file
 # to other terminals. To fix this issue, set $HISTFILE back to the default location before ~/.zshrc
@@ -31,6 +44,34 @@ if [[ "$VSCODE_INJECTION" == "1" ]]; then
 		. $USER_ZDOTDIR/.zshrc
 	fi
 fi
+
+# --- Start Positron ---
+if [[ -n "${__positron_standard_prompt:-}" ]]; then
+	# Most frameworks set the prompt once or from a precmd hook, which the reset below overrides.
+	# Those that redraw it asynchronously (outside precmd) must be unloaded instead.
+	if (( $+functions[powerlevel10k_plugin_unload] )); then
+		powerlevel10k_plugin_unload
+		# powerlevel10k unsets this variable on load to turn VS Code's shell integration off in
+		# favor of its own; it is no longer loaded, so turn it back on
+		VSCODE_SHELL_INTEGRATION=1
+	fi
+	PS1="$__positron_standard_prompt"
+	PS2='%_> '
+	RPROMPT=''
+
+	# Called from __vsc_precmd, after the user's precmd hooks and before the prompt is wrapped
+	__positron_apply_standard_prompt() {
+		if [[ "$PS1" != *"$__positron_standard_prompt"* ]]; then
+			PS1="$__positron_standard_prompt"
+			# Outside command execution __vsc_precmd does not wrap the prompt, do it here
+			if [ -z "${__vsc_in_command_execution-}" ]; then
+				__vsc_update_prompt
+			fi
+		fi
+		RPROMPT=''
+	}
+fi
+# --- End Positron ---
 
 __vsc_use_aa=0
 __vsc_env_keys=()
@@ -84,7 +125,13 @@ if [ -z "${VSCODE_PYTHON_AUTOACTIVATE_GUARD:-}" ]; then
 fi
 
 # Report prompt type
-if [ -n "${P9K_SSH:-}" ] || [ -n "${P9K_TTY:-}" ]; then
+# --- Start Positron ---
+# The user's prompt framework is replaced by the standard prompt, so don't report it
+if [ -n "${__positron_standard_prompt:-}" ]; then
+	:
+elif [ -n "${P9K_SSH:-}" ] || [ -n "${P9K_TTY:-}" ]; then
+# if [ -n "${P9K_SSH:-}" ] || [ -n "${P9K_TTY:-}" ]; then
+# --- End Positron ---
 	builtin printf '\e]633;P;PromptType=p10k\a'
 	# Force shell integration on for p10k
 	# typeset -g POWERLEVEL9K_TERM_SHELL_INTEGRATION=true
@@ -307,6 +354,11 @@ __vsc_update_prompt() {
 
 __vsc_precmd() {
 	builtin local __vsc_status="$?"
+	# --- Start Positron ---
+	if [[ -n "${__positron_standard_prompt:-}" ]]; then
+		__positron_apply_standard_prompt
+	fi
+	# --- End Positron ---
 	if [ -z "${__vsc_in_command_execution-}" ]; then
 		# not in command execution
 		__vsc_command_output_start

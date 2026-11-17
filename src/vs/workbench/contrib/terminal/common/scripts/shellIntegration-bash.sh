@@ -10,6 +10,17 @@ fi
 
 VSCODE_SHELL_INTEGRATION=1
 
+# --- Start Positron ---
+# When terminal.integrated.standardPrompt is enabled, the user's prompt customizations (starship,
+# oh-my-bash, oh-my-posh, a custom PS1, ...) are replaced with a standard prompt after the startup
+# files have run, and the prompt is reasserted before each prompt is drawn.
+__positron_standard_prompt=""
+if [ "${POSITRON_STANDARD_PROMPT:-}" = "1" ]; then
+	__positron_standard_prompt='\u@\h \W \$ '
+fi
+builtin unset POSITRON_STANDARD_PROMPT
+# --- End Positron ---
+
 vsc_env_keys=()
 vsc_env_values=()
 use_associative_array=0
@@ -57,6 +68,22 @@ if [ "$VSCODE_INJECTION" == "1" ]; then
 	fi
 	builtin unset VSCODE_INJECTION
 fi
+
+# --- Start Positron ---
+if [ -n "$__positron_standard_prompt" ]; then
+	PS1="$__positron_standard_prompt"
+	PS2='> '
+
+	# Called from __vsc_precmd, after the user's PROMPT_COMMAND and before the prompt is wrapped
+	__positron_apply_standard_prompt() {
+		if [[ "$PS1" != *"$__positron_standard_prompt"* ]]; then
+			PS1="$__positron_standard_prompt"
+			# Make __vsc_update_prompt wrap the new prompt even outside command execution
+			__vsc_in_command_execution="1"
+		fi
+	}
+fi
+# --- End Positron ---
 
 if [ -z "$VSCODE_SHELL_INTEGRATION" ]; then
 	builtin return
@@ -228,7 +255,13 @@ if [ "$__vsc_stable" = "0" ]; then
 	builtin printf "\e]633;P;ContinuationPrompt=$(echo "$PS2" | sed 's/\x1b/\\\\x1b/g')\a"
 fi
 
-if [ -n "$STARSHIP_SESSION_KEY" ]; then
+# --- Start Positron ---
+# The user's prompt framework is replaced by the standard prompt, so don't report it
+if [ -n "$__positron_standard_prompt" ]; then
+	:
+elif [ -n "$STARSHIP_SESSION_KEY" ]; then
+# if [ -n "$STARSHIP_SESSION_KEY" ]; then
+# --- End Positron ---
 	builtin printf '\e]633;P;PromptType=starship\a'
 elif [ -n "$POSH_SESSION_ID" ]; then
 	builtin printf '\e]633;P;PromptType=oh-my-posh\a'
@@ -399,6 +432,11 @@ __vsc_update_prompt() {
 }
 
 __vsc_precmd() {
+	# --- Start Positron ---
+	if [ -n "$__positron_standard_prompt" ]; then
+		__positron_apply_standard_prompt
+	fi
+	# --- End Positron ---
 	__vsc_command_complete "$__vsc_status"
 	__vsc_current_command=""
 	# Report prompt is a work in progress, currently encoding is too slow
